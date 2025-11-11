@@ -9,10 +9,20 @@ import {IntentTypes} from "../../src/libraries/IntentTypes.sol";
 import {IntentHub} from "../../src/IntentHub.sol";
 import {SettlementEscrow} from "../../src/SettlementEscrow.sol";
 import {IntentHubHarness} from "../utils/IntentHubHarness.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+
+contract TestToken is ERC20 {
+    constructor() ERC20("TestToken", "TTKN") {}
+
+    function mint(address to, uint256 amount) external {
+        _mint(to, amount);
+    }
+}
 
 contract IntentHubTest is Test {
     SettlementEscrow internal escrow;
     IntentHubHarness internal hub;
+    TestToken internal token;
 
     address internal admin = address(this);
     address internal trader = address(0xC0DE);
@@ -21,6 +31,7 @@ contract IntentHubTest is Test {
     function setUp() external {
         escrow = new SettlementEscrow(admin);
         hub = new IntentHubHarness(admin, escrow);
+        token = new TestToken();
 
         escrow.grantIntentHubRole(address(hub));
 
@@ -29,7 +40,7 @@ contract IntentHubTest is Test {
     }
 
     function testCommitRevealFlow() external {
-        uint256 intentId = _openIntent();
+        uint256 intentId = _openNativeIntent();
         TypesLib.Ciphertext memory ciphertext = _dummyCiphertext();
         bytes memory condition = abi.encode("B", block.number + 1);
         bytes memory decryptedPayload = abi.encodePacked("cipherflow-route");
@@ -49,7 +60,7 @@ contract IntentHubTest is Test {
     }
 
     function testSlashCollateralTransfersToBeneficiary() external {
-        uint256 intentId = _openIntent();
+        uint256 intentId = _openNativeIntent();
         TypesLib.Ciphertext memory ciphertext = _dummyCiphertext();
         bytes memory condition = abi.encode("B", block.number + 1);
         bytes32 payloadHash = keccak256("slash-collateral");
@@ -70,7 +81,7 @@ contract IntentHubTest is Test {
     }
 
     function testNativeSettlementDistributesFunds() external {
-        uint256 intentId = _openIntent();
+        uint256 intentId = _openNativeIntent();
         TypesLib.Ciphertext memory ciphertext = _dummyCiphertext();
         bytes memory condition = abi.encode("B", block.number + 1);
         bytes memory decryptedPayload = abi.encodePacked("native-settlement");
@@ -101,7 +112,40 @@ contract IntentHubTest is Test {
         assertEq(hub.getIntent(intentId).amountIn, 0, "intent cleared");
     }
 
-    function _openIntent() internal returns (uint256 intentId) {
+    function testERC20SettlementDistributesTokens() external {
+        uint256 amount = 500e18;
+        token.mint(trader, amount);
+
+        uint256 intentId = _openERC20Intent(amount);
+        TypesLib.Ciphertext memory ciphertext = _dummyCiphertext();
+        bytes memory condition = abi.encode("B", block.number + 1);
+        bytes memory decryptedPayload = abi.encodePacked("erc20-settlement");
+        bytes32 payloadHash = keccak256(decryptedPayload);
+
+        uint256 commitmentId =
+            _commitIntent(intentId, payloadHash, ciphertext, condition, hub.defaultCallbackGasLimit());
+        uint256 requestId = hub.getRequestId(commitmentId);
+        hub.simulateBlocklockCallback(requestId, decryptedPayload);
+
+        uint256 solverReward = 120e18;
+        vm.prank(solver);
+        hub.recordExecution(commitmentId, amount, solverReward, bytes32("erc20tx"), true);
+
+        uint256 solverBefore = token.balanceOf(solver);
+        uint256 recipientBefore = token.balanceOf(trader);
+
+        vm.prank(admin);
+        hub.settleERC20(commitmentId, solverReward);
+
+        assertEq(token.balanceOf(solver), solverBefore + solverReward, "solver token reward");
+        assertEq(token.balanceOf(trader), recipientBefore + (amount - solverReward), "recipient token payout");
+
+        IntentHub.CommitmentRecord memory record = hub.getCommitment(commitmentId);
+        assertTrue(record.execution.settlementClaimed, "erc20 settled");
+        assertEq(hub.getIntent(intentId).amountIn, 0, "intent token cleared");
+    }
+
+    function _openNativeIntent() internal returns (uint256 intentId) {
         vm.startPrank(trader);
         uint64 commitDeadline = uint64(block.timestamp + 1 hours);
         uint64 revealDeadline = commitDeadline + 1 hours;
@@ -143,6 +187,32 @@ contract IntentHubTest is Test {
         });
         cipher.v = abi.encodePacked(bytes32(uint256(123)));
         cipher.w = abi.encodePacked(bytes32(uint256(456)));
+    }
+
+    function _openERC20Intent(uint256 amount) internal returns (uint256 intentId) {
+        vm.startPrank(trader);
+        token.approve(address(escrow), amount);
+
+        uint64 commitDeadline = uint64(block.timestamp + 1 hours);
+        uint64 revealDeadline = commitDeadline + 1 hours;
+        uint64 executionDeadline = revealDeadline + 1 hours;
+
+        IntentHub.IntentConfig memory cfg = IntentHub.IntentConfig({
+            settlementAsset: address(token),
+            recipient: trader,
+            amountIn: amount,
+            minAmountOut: amount - 100e18,
+            commitDeadline: commitDeadline,
+            revealDeadline: revealDeadline,
+            executionDeadline: executionDeadline,
+            extraData: ""
+        });
+
+        intentId = hub.createIntent(cfg);
+        vm.stopPrank();
+
+        assertEq(token.balanceOf(address(escrow)), amount, "escrow token balance");
+        assertEq(hub.getIntent(intentId).amountIn, amount, "intent token amount");
     }
 }
 
