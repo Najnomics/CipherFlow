@@ -66,6 +66,7 @@ library IntentTypes {
         bytes32 settlementTxHash;
         bool success;
         uint64 executedAt;
+        bool settlementClaimed;
     }
 }
 

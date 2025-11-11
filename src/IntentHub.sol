@@ -89,6 +89,7 @@ contract IntentHub is BlockLockAdapter, AccessControl, ReentrancyGuard {
     event CollateralWithdrawn(uint256 indexed commitmentId, address indexed solver, uint256 amount);
     event TreasuryUpdated(address indexed newTreasury);
     event CollateralSlashed(uint256 indexed commitmentId, address indexed beneficiary, uint256 amount);
+    event NativeIntentSettled(uint256 indexed intentId, uint256 solverReward, uint256 traderPayout);
 
     error IntentNotOpen(uint256 intentId);
     error DeadlineConfigurationInvalid();
@@ -327,6 +328,38 @@ contract IntentHub is BlockLockAdapter, AccessControl, ReentrancyGuard {
 
     function getCollateralBalance(uint256 commitmentId) external view returns (uint256) {
         return collateralNative[commitmentId];
+    }
+
+    function settleNative(uint256 commitmentId, uint256 solverReward)
+        external
+        nonReentrant
+        onlyRole(ADMIN_ROLE)
+    {
+        CommitmentRecord storage record = _requireCommitment(commitmentId);
+        IntentTypes.Intent storage intent = intents[record.intentId];
+        require(intent.settlementAsset == address(0), "not native intent");
+
+        IntentTypes.ExecutionReceipt storage exec = record.execution;
+        require(exec.executedAt != 0 && exec.success, "execution incomplete");
+        require(!exec.settlementClaimed, "already settled");
+
+        uint256 total = intent.amountIn;
+        require(total >= solverReward, "reward too high");
+
+        uint256 traderPayout = total - solverReward;
+
+        if (solverReward > 0) {
+            SETTLEMENT_ESCROW.releaseNative(record.intentId, payable(record.commitment.solver), solverReward);
+        }
+        if (traderPayout > 0) {
+            SETTLEMENT_ESCROW.releaseNative(record.intentId, payable(intent.recipient), traderPayout);
+        }
+
+        exec.settlementClaimed = true;
+        exec.solverPayout = solverReward;
+        intent.amountIn = 0;
+
+        emit NativeIntentSettled(record.intentId, solverReward, traderPayout);
     }
 
     // --------------------------

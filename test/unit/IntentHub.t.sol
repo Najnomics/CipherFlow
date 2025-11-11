@@ -69,6 +69,38 @@ contract IntentHubTest is Test {
         assertEq(beneficiary.balance, beneficiaryBefore + slashAmount);
     }
 
+    function testNativeSettlementDistributesFunds() external {
+        uint256 intentId = _openIntent();
+        TypesLib.Ciphertext memory ciphertext = _dummyCiphertext();
+        bytes memory condition = abi.encode("B", block.number + 1);
+        bytes memory decryptedPayload = abi.encodePacked("native-settlement");
+        bytes32 payloadHash = keccak256(decryptedPayload);
+
+        uint256 commitmentId =
+            _commitIntent(intentId, payloadHash, ciphertext, condition, hub.defaultCallbackGasLimit());
+
+        uint256 requestId = hub.getRequestId(commitmentId);
+        hub.simulateBlocklockCallback(requestId, decryptedPayload);
+
+        uint256 solverReward = 0.2 ether;
+
+        vm.prank(solver);
+        hub.recordExecution(commitmentId, 1 ether, solverReward, bytes32("tx"), true);
+
+        uint256 traderBefore = trader.balance;
+        uint256 solverBefore = solver.balance;
+
+        vm.prank(admin);
+        hub.settleNative(commitmentId, solverReward);
+
+        assertEq(trader.balance, traderBefore + (1 ether - solverReward), "trader payout");
+        assertEq(solver.balance, solverBefore + solverReward, "solver reward");
+
+        IntentHub.CommitmentRecord memory record = hub.getCommitment(commitmentId);
+        assertTrue(record.execution.settlementClaimed, "settled flag");
+        assertEq(hub.getIntent(intentId).amountIn, 0, "intent cleared");
+    }
+
     function _openIntent() internal returns (uint256 intentId) {
         vm.startPrank(trader);
         uint64 commitDeadline = uint64(block.timestamp + 1 hours);
@@ -97,10 +129,11 @@ contract IntentHubTest is Test {
         bytes memory condition,
         uint32 callbackGasLimit
     ) internal returns (uint256 commitmentId) {
-        vm.prank(solver);
+        vm.startPrank(solver);
         commitmentId = hub.commitToIntent{value: hub.minimumCollateral()}(
             intentId, payloadHash, ciphertext, condition, callbackGasLimit, hub.minimumCollateral()
         );
+        vm.stopPrank();
     }
 
     function _dummyCiphertext() internal pure returns (TypesLib.Ciphertext memory cipher) {
