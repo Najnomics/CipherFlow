@@ -3,6 +3,7 @@ pragma solidity ^0.8.28;
 
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
@@ -21,6 +22,9 @@ contract SettlementEscrow is AccessControl, ReentrancyGuard {
     event NativeReleased(uint256 indexed intentId, address indexed to, uint256 amount);
     event TokenDeposited(uint256 indexed intentId, address indexed token, address indexed from, uint256 amount);
     event TokenReleased(uint256 indexed intentId, address indexed token, address indexed to, uint256 amount);
+    event TokenDepositedWithPermit(
+        uint256 indexed intentId, address indexed token, address indexed from, uint256 amount, uint256 deadline
+    );
 
     error NotAuthorised();
     error InsufficientBalance();
@@ -56,6 +60,23 @@ contract SettlementEscrow is AccessControl, ReentrancyGuard {
         tokenBalances[intentId][token] += amount;
         IERC20(token).safeTransferFrom(from, address(this), amount);
         emit TokenDeposited(intentId, token, from, amount);
+    }
+
+    /// @notice Pull ERC20 liquidity using an EIP-2612 permit signature.
+    function depositTokenWithPermit(
+        uint256 intentId,
+        address token,
+        address from,
+        uint256 amount,
+        uint256 deadline,
+        uint8 v,
+        bytes32 r,
+        bytes32 s
+    ) external onlyIntentHub nonReentrant {
+        IERC20Permit(token).permit(from, address(this), amount, deadline, v, r, s);
+        tokenBalances[intentId][token] += amount;
+        IERC20(token).safeTransferFrom(from, address(this), amount);
+        emit TokenDepositedWithPermit(intentId, token, from, amount, deadline);
     }
 
     /// @notice Release native liquidity towards a recipient when an intent closes or settles.
