@@ -29,6 +29,47 @@ contract IntentHubTest is Test {
     }
 
     function testCommitRevealFlow() external {
+        uint256 intentId = _openIntent();
+        TypesLib.Ciphertext memory ciphertext = _dummyCiphertext();
+        bytes memory condition = abi.encode("B", block.number + 1);
+        bytes memory decryptedPayload = abi.encodePacked("cipherflow-route");
+        bytes32 payloadHash = keccak256(decryptedPayload);
+
+        uint256 commitmentId =
+            _commitIntent(intentId, payloadHash, ciphertext, condition, hub.defaultCallbackGasLimit());
+
+        uint256 requestId = hub.getRequestId(commitmentId);
+        hub.simulateBlocklockCallback(requestId, decryptedPayload);
+
+        IntentHub.CommitmentRecord memory record = hub.getCommitment(commitmentId);
+        assertEq(uint8(record.commitment.state), uint8(IntentTypes.CommitmentState.RevealReady));
+        assertEq(record.commitment.blocklockRequestId, requestId);
+        assertEq(keccak256(record.reveal.decryptedPayload), payloadHash);
+        assertEq(keccak256(record.reveal.decryptionKey), keccak256(decryptedPayload));
+    }
+
+    function testSlashCollateralTransfersToBeneficiary() external {
+        uint256 intentId = _openIntent();
+        TypesLib.Ciphertext memory ciphertext = _dummyCiphertext();
+        bytes memory condition = abi.encode("B", block.number + 1);
+        bytes32 payloadHash = keccak256("slash-collateral");
+
+        uint256 commitmentId = _commitIntent(intentId, payloadHash, ciphertext, condition, hub.defaultCallbackGasLimit());
+
+        address beneficiary = address(0xBEEF);
+        uint256 slashAmount = hub.minimumCollateral() / 2;
+        assertGt(slashAmount, 0);
+
+        uint256 beneficiaryBefore = beneficiary.balance;
+
+        vm.prank(admin);
+        hub.slashCollateral(commitmentId, slashAmount, beneficiary);
+
+        assertEq(hub.getCollateralBalance(commitmentId), hub.minimumCollateral() - slashAmount);
+        assertEq(beneficiary.balance, beneficiaryBefore + slashAmount);
+    }
+
+    function _openIntent() internal returns (uint256 intentId) {
         vm.startPrank(trader);
         uint64 commitDeadline = uint64(block.timestamp + 1 hours);
         uint64 revealDeadline = commitDeadline + 1 hours;
@@ -45,32 +86,21 @@ contract IntentHubTest is Test {
             extraData: ""
         });
 
-        uint256 intentId = hub.createIntent{value: 1 ether}(cfg);
+        intentId = hub.createIntent{value: 1 ether}(cfg);
         vm.stopPrank();
+    }
 
-        TypesLib.Ciphertext memory ciphertext = _dummyCiphertext();
-        bytes memory condition = abi.encode("B", block.number + 1);
-        bytes memory decryptedPayload = abi.encodePacked("cipherflow-route");
-        bytes32 payloadHash = keccak256(decryptedPayload);
-
+    function _commitIntent(
+        uint256 intentId,
+        bytes32 payloadHash,
+        TypesLib.Ciphertext memory ciphertext,
+        bytes memory condition,
+        uint32 callbackGasLimit
+    ) internal returns (uint256 commitmentId) {
         vm.prank(solver);
-        uint256 commitmentId = hub.commitToIntent{value: hub.minimumCollateral()}(
-            intentId,
-            payloadHash,
-            ciphertext,
-            condition,
-            hub.defaultCallbackGasLimit(),
-            hub.minimumCollateral()
+        commitmentId = hub.commitToIntent{value: hub.minimumCollateral()}(
+            intentId, payloadHash, ciphertext, condition, callbackGasLimit, hub.minimumCollateral()
         );
-
-        uint256 requestId = hub.getRequestId(commitmentId);
-        hub.simulateBlocklockCallback(requestId, decryptedPayload);
-
-        IntentHub.CommitmentRecord memory record = hub.getCommitment(commitmentId);
-        assertEq(uint8(record.commitment.state), uint8(IntentTypes.CommitmentState.RevealReady));
-        assertEq(record.commitment.blocklockRequestId, requestId);
-        assertEq(keccak256(record.reveal.decryptedPayload), payloadHash);
-        assertEq(keccak256(record.reveal.decryptionKey), keccak256(decryptedPayload));
     }
 
     function _dummyCiphertext() internal pure returns (TypesLib.Ciphertext memory cipher) {

@@ -46,6 +46,7 @@ contract IntentHub is BlockLockAdapter, AccessControl, ReentrancyGuard {
     }
 
     SettlementEscrow public immutable SETTLEMENT_ESCROW;
+    address public treasury;
 
     uint96 public minimumCollateral;
     uint32 public defaultCallbackGasLimit;
@@ -86,6 +87,8 @@ contract IntentHub is BlockLockAdapter, AccessControl, ReentrancyGuard {
         bool success
     );
     event CollateralWithdrawn(uint256 indexed commitmentId, address indexed solver, uint256 amount);
+    event TreasuryUpdated(address indexed newTreasury);
+    event CollateralSlashed(uint256 indexed commitmentId, address indexed beneficiary, uint256 amount);
 
     error IntentNotOpen(uint256 intentId);
     error DeadlineConfigurationInvalid();
@@ -104,6 +107,7 @@ contract IntentHub is BlockLockAdapter, AccessControl, ReentrancyGuard {
         SETTLEMENT_ESCROW = escrow;
         minimumCollateral = 0.1 ether;
         defaultCallbackGasLimit = 300_000;
+        treasury = admin;
 
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(ADMIN_ROLE, admin);
@@ -119,6 +123,12 @@ contract IntentHub is BlockLockAdapter, AccessControl, ReentrancyGuard {
 
     function setDefaultCallbackGasLimit(uint32 newLimit) external onlyRole(ADMIN_ROLE) {
         defaultCallbackGasLimit = newLimit;
+    }
+
+    function setTreasury(address newTreasury) external onlyRole(ADMIN_ROLE) {
+        require(newTreasury != address(0), "treasury zero");
+        treasury = newTreasury;
+        emit TreasuryUpdated(newTreasury);
     }
 
     // ----------------
@@ -245,6 +255,21 @@ contract IntentHub is BlockLockAdapter, AccessControl, ReentrancyGuard {
         }
     }
 
+    function slashCollateral(uint256 commitmentId, uint256 amount, address beneficiary) external onlyRole(ADMIN_ROLE) {
+        require(amount > 0, "amount zero");
+
+        uint256 balance = collateralNative[commitmentId];
+        require(balance >= amount, "insufficient collateral");
+
+        collateralNative[commitmentId] = balance - amount;
+
+        address payout = beneficiary == address(0) ? treasury : beneficiary;
+        (bool success,) = payable(payout).call{value: amount}("");
+        require(success, "collateral transfer failed");
+
+        emit CollateralSlashed(commitmentId, payout, amount);
+    }
+
     function recordExecution(
         uint256 commitmentId,
         uint256 amountOut,
@@ -298,6 +323,10 @@ contract IntentHub is BlockLockAdapter, AccessControl, ReentrancyGuard {
 
     function listCommitmentsForIntent(uint256 intentId) external view returns (uint256[] memory) {
         return intentCommitments[intentId];
+    }
+
+    function getCollateralBalance(uint256 commitmentId) external view returns (uint256) {
+        return collateralNative[commitmentId];
     }
 
     // --------------------------
