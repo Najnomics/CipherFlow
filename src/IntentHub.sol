@@ -211,6 +211,7 @@ contract IntentHub is BlockLockAdapter, AccessControl, ReentrancyGuard {
         uint256 requestId =
             _requestBlocklockWithSubscriptionForCommitment(commitmentId, record.callbackGasLimit, condition, ciphertext);
         blocklockRequestToCommitment[requestId] = commitmentId;
+        commitment.blocklockRequestId = requestId;
 
         collateralNative[commitmentId] = collateral;
 
@@ -314,7 +315,7 @@ contract IntentHub is BlockLockAdapter, AccessControl, ReentrancyGuard {
             revert CommitmentStateInvalid(commitmentId, IntentTypes.CommitmentState.PendingReveal);
         }
 
-        bytes memory plaintext = _decrypt(record.ciphertext, decryptionKey);
+        bytes memory plaintext = _decodePayload(record.ciphertext, decryptionKey);
         if (keccak256(plaintext) != commitment.payloadHash) {
             revert PayloadHashMismatch(commitmentId);
         }
@@ -369,6 +370,15 @@ contract IntentHub is BlockLockAdapter, AccessControl, ReentrancyGuard {
         } else {
             SETTLEMENT_ESCROW.releaseToken(intentId, intent.settlementAsset, intent.trader, intent.amountIn);
         }
+    }
+
+    function _decodePayload(TypesLib.Ciphertext memory ciphertext, bytes calldata decryptionKey)
+        internal
+        view
+        virtual
+        returns (bytes memory)
+    {
+        return _decrypt(ciphertext, decryptionKey);
     }
 }
 
