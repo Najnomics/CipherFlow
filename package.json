@@ -1,0 +1,15 @@
+{
+  "name": "cipherflow",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CipherFlow solver network hackathon project",
+  "scripts": {
+    "build:contracts": "forge build",
+    "test:contracts": "forge test",
+    "lint": "forge fmt"
+  },
+  "dependencies": {
+    "blocklock-solidity": "github:randa-mu/blocklock-solidity#main"
+  },
+  "packageManager": "pnpm@9.12.3"
+}

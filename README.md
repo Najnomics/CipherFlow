@@ -18,54 +18,54 @@
    ┌────────────┐    sealed quote     ┌──────────────────┐
    │  Trader    │────────────────────▶│   IntentHub.sol   │
    └────────────┘    commitment       └──────────────────┘
-                                         │        ▲
-                                         │        │ decrypt key
-                                         ▼        │ (BlockLockSender)
-                                 ┌────────────────────────┐
-                                 │  BlockLock Network     │
-                                 └────────────────────────┘
-                                         │
-                                         ▼
-                           ┌─────────────────────────┐
-                           │ CipherFlow Executor Bot │
-                           └─────────────────────────┘
-                                         │
-                                         ▼
-                                ┌────────────────┐
-                                │ Settlement TX  │
-                                └────────────────┘
-                                         │
-                                         ▼
-                               ┌──────────────────┐
-                               │ Reveal Explorer  │
-                               └──────────────────┘
+                                        │        ▲
+                                        │        │ decrypt key
+                                        ▼        │ (BlockLockSender)
+                                ┌────────────────────────┐
+                                │  BlockLock Network     │
+                                └────────────────────────┘
+                                        │
+                                        ▼
+                          ┌─────────────────────────┐
+                          │ CipherFlow Executor Bot │
+                          └─────────────────────────┘
+                                        │
+                                        ▼
+                               ┌────────────────┐
+                               │ Settlement TX  │
+                               └────────────────┘
+                                        │
+                                        ▼
+                              ┌──────────────────┐
+                              │ Reveal Explorer  │
+                              └──────────────────┘
 ```
 
 ## Component Breakdown
 
-### On-Chain Contracts (Foundry + Hardhat tests)
-1. **`IntentHub` (UUPS upgradeable)**
+### On-Chain Contracts (Foundry tests)
+1. **`IntentHub` (UUPS-style but standalone in Phase 1)**
    - Accepts solver commitments: `(intentId, solver, ciphertext, condition, collateral)`.
    - Tracks auction state (`Open`, `Revealed`, `Settled`, `Expired`).
-   - Enforces deterministic reveal block; default config targets `block.number + 1` for near-instant reveals.
-   - Validates decrypted quote hash against commitment when BlockLock callback fires.
-   - Releases solver collateral or slashes for non-delivery.
+   - Enforces decrypt block immediately (`block.number + 1`) for near-instant reveals.
+   - Validates decrypted payload hash against commitment when BlockLock callback fires.
+   - Releases solver collateral (native) post execution/cancellation.
 
 2. **`SettlementEscrow`**
-   - Holds trader funds (or authorization proof) until winning solver executes swap bundle.
-   - Supports signature-based pulls (EIP-712) so traders avoid pre-funding.
+   - Holds trader funds (native or ERC20) until winning solver executes swap bundle.
+   - Allows IntentHub-only disbursements to trader/solver.
+   - Pulls ERC20 via `safeTransferFrom`, native via payable entrypoints.
 
 3. **`BlockLockAdapter`**
    - Immutable link to deployed `BlocklockSender` proxy per network.
-   - Helper for encoding conditions (`blockHeight`, `deadline`, optional `oracleRoundId`).
-   - Emits `EncryptedQuoteRegistered` for off-chain monitoring.
+  - Helper for encoding conditions (`blockHeight`, `deadline`, optional `oracleRoundId`).
+  - Emits `BlocklockRequestLinked` for off-chain monitoring.
 
-4. **`MetricsEmitter`** (library or module)
-   - Emits structured logs for reveal/execution (price, gas, source DEX, bridge leg).
-   - Consumed by the explorer UI.
+4. **`IntentTypes` library**
+   - Canonical structs/enums for intents, commitments, reveals, and execution receipts.
 
-5. **`VerifierMocks` (test only)**
-   - Deterministic harness using CoFheTest to simulate ciphertext + decryption key delivery.
+5. **`VerifierMocks` (future)**
+   - Deterministic harness using CoFheTest to simulate ciphertext + decryption key delivery for tests.
 
 ### Off-Chain Services (TypeScript / Node)
 1. **`cipherflow-listener`**
@@ -96,37 +96,33 @@
    - Auto-refills subscription or falls back to direct funding.
 
 ### Shared Libraries
-- **`libs/encoding`**: canonical serialization of solver payloads to avoid reveal mismatches.
-- **`libs/intent-registry.json`**: network-specific config (BlockLock sender address, auction timing, supported tokens).
-- **`libs/testing/fixtures`**: sample ciphertexts, stub decrypt keys for unit testing contracts.
+- **`libs/encoding`** (planned): canonical serialization of solver payloads to avoid reveal mismatches.
+- **`libs/intent-registry.json`** (planned): network-specific config (BlockLock sender address, auction timing, supported tokens).
+- **`libs/testing/fixtures`** (planned): sample ciphertexts, stub decrypt keys for unit testing contracts.
 
 ## Data Flow
 1. **Intent ingestion**: trader signs an `Intent` with execution bounds; posted to `IntentHub` via API or direct tx.
-2. **Commitment phase**: solver encrypts route payload (Step plan + expectedOut + expiry). Calls `IntentHub.commit()` sending ciphertext + condition bytes, optionally staking collateral.
+2. **Commitment phase**: solver encrypts route payload (step plan + expectedOut + expiry). Calls `IntentHub.commitToIntent()` sending ciphertext + condition bytes, optionally staking collateral.
 3. **Waiting window**: auction remains open until `commitDeadline`. Additional solvers can commit (multi-commit allowed; escrow stores best hash per solver).
 4. **Reveal trigger**: decrypt condition is `abi.encode("B", block.number + 1)` so the BlockLock network returns the matching key in the very next block via `IntentHub.receiveBlocklock` (inherits `AbstractBlocklockReceiver`). Each commitment maps to its own BlockLock request ID and receives an isolated key.
-5. **Validation**: contract decodes plaintext, checks:
-   - hash(payload) matches commitment hash
-   - deadline not expired
-   - signature from solver still valid
-   - slippage within trader tolerance
-6. **Winner selection**: cheapest valid route becomes provisional winner; others refunded.
-7. **Execution**: off-chain executor receives `WinnerSelected` event, replicates payload execution on-chain (DEX swaps, bridging). Settlement proven by posting tx hash and measured output.
-8. **Finalization**: if execution success within SLA, escrow releases reward to solver and sends output to trader. If fail/timeout, fallback solver triggered or auction cancelled.
-9. **Observability**: explorer reads `Commit`, `Reveal`, `Execute`, `Settle` logs, updates dashboards.
+5. **Validation**: contract decodes plaintext, checks payload hash matches initial commitment (proof of quote integrity).
+6. **Winner selection**: off-chain logic compares decrypted payloads; IntentHub records the winning execution receipt and updates settlement state.
+7. **Execution**: off-chain executor receives `CommitmentRevealed` and `ExecutionRecorded` events, replicates payload execution on-chain (DEX swaps, bridging). Settlement proven by posting tx hash and measured output.
+8. **Finalization**: if execution succeeds within SLA, escrow releases reward to solver and sends output to trader. Fail/timeout paths mark commitment as expired and keep collateral slashable.
+9. **Observability**: explorer reads `IntentCreated`, `CommitmentSubmitted`, `CommitmentRevealed`, `ExecutionRecorded`, `CollateralWithdrawn` logs, updating dashboards.
 
 ## Planned Implementations
 
 ### Smart Contracts
 - `src/IntentHub.sol`
-  - Storage layout for intents, commitments, statuses.
-  - Integrates `blocklock-solidity` via `AbstractBlocklockReceiver`.
-  - Permissioned admin for config (auction window, collateral rate).
+  - Storage layout for intents, commitments, reveals and execution receipts.
+  - Integrates `blocklock-solidity` via `BlockLockAdapter`.
+  - Permissioned admin for config (auction windows, collateral floor, callback gas limits).
   - Tests: Foundry unit + invariant (ensure no double-withdraw) + fuzz (random reveal delays).
 
 - `src/SettlementEscrow.sol`
   - Supports native + ERC20 settlement.
-  - Pull-based payout using permit/EIP-2612 for ERC20.
+  - Pull-based payout using permit/EIP-2612 for ERC20 (future).
   - Reentrancy-safe; uses pull pattern for solvers.
 
 - `src/adapters/BlockLockAdapter.sol`
@@ -134,10 +130,10 @@
   - Abstracts `_requestBlocklockWithSubscription` vs `_requestBlocklockPayInNative`.
 
 - `src/libraries/IntentTypes.sol`
-  - Structs/enums for intents, commitments, reveals.
-  - Hashing utilities (EIP-712 domain separators).
+  - Structs/enums for intents, commitments, reveals, execution receipts.
+  - Hashing utilities (EIP-712 domain separators) planned.
 
-- `src/mocks/MockBlockLockReceiver.sol`
+- `src/mocks/MockBlockLockReceiver.sol` (planned)
   - Extended from project mock; used to simulate callback in tests.
 
 ### Off-Chain Packages
@@ -156,12 +152,12 @@
 
 ### DevOps & Tooling
 - Foundry profile for contracts (`forge test`, `forge script` deploys).
-- Hardhat tests for cross-chain bridging mocks (if needed) and TypeChain bindings.
+- pnpm pipeline for TypeScript packages (`pnpm install` vendors BlockLock + future SDKs).
 - GitHub Actions for lint/test (optional but improves judging rigour).
 - Coverage scripts via `utils/coverage.sh`.
 
 ## Security & Assumptions
-- BlockLock network assumed honest majority; fallback path if decryption delayed (auction expires, collateral slashed).
+- BlockLock network assumed honest majority; fallback path if decryption delayed (commitment expires, collateral slashable).
 - Each encrypted commitment is isolated—BlockLock returns a unique key per request, so revealing one quote never unlocks competitors.
 - Solver execution uses private tx routes to avoid MEV copying; if not available, we sign calldata and prove authenticity via reveal.
 - Collateral prevents griefing (e.g., submitting garbage ciphertext to block reveals).
@@ -170,7 +166,7 @@
 ## Testing Strategy
 - **Unit**: storage layout, commitment validation, escrow accounting, permission checks.
 - **Integration**: simulate full auction with `CoFheTest` harness providing test decrypt keys.
-- **E2E**: Hardhat fork script orchestrating trader → solver → reveal → execution on testnet.
+- **E2E**: Foundry fork script orchestrating trader → solver → reveal → execution on testnet.
 - **Chaos**: random failure injection (missing decrypt key, executor down) to verify fallback logic.
 
 ## Milestones & Deliverables
@@ -180,8 +176,7 @@
 4. **Submission**: GitHub repo, README (this file), deployment scripts, demo video, deployed testnet addresses, judge wallet.
 
 ## Next Steps
-- Scaffold contract directory structure (`src/`, `script/`, `test/`).
-- Add Foundry + Hardhat configs (reuse parent repo’s tooling where possible).
-- Implement `IntentHub` minimum viable functionality.
+- Flesh out settlement flows (ERC20 support, collateral slashing).
+- Build Foundry test suite covering commit → reveal → execution paths.
 - Spin up solver bot skeleton with encrypted commitments.
 - Build explorer UI with real-time reveal visualisation.
