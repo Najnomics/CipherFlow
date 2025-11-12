@@ -1,20 +1,38 @@
+import "dotenv/config";
 import { zeroAddress } from "viem";
 import { z } from "zod";
 
 import { createDefaultConnectors, type SwapIntentDefinition } from "@cipherflow/markets";
 import { RoutePlanner } from "./routePlanner.js";
+import { Blocklock, encodeCiphertextToSolidity, encodeCondition } from "blocklock-js";
+import { ethers } from "ethers";
+import intentHubArtifact from "../../out/IntentHub.sol/IntentHub.json" assert { type: "json" };
 
-const envSchema = z.object({
-  LISTENER_URL: z.string().url().optional(),
+const configSchema = z.object({
+  BASE_SEPOLIA_RPC_URL: z.string().url(),
+  SOLVER_PRIVATE_KEY: z.string().min(32),
+  INTENT_HUB_ADDRESS: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+  SOLVER_COLLATERAL_WEI: z.string().regex(/^\d+$/).transform((v) => BigInt(v)),
   GAS_PRICE_GWEI: z.coerce.number().positive().optional(),
+  BLOCKLOCK_CALLBACK_GAS_LIMIT: z.coerce.number().int().positive().optional(),
+  BLOCKLOCK_API_KEY: z.string().optional(),
+  BLOCKLOCK_SUBSCRIPTION_ID: z.string().optional(),
+  BLOCKLOCK_ENCRYPTION_ENDPOINT: z.string().optional(),
+  BLOCKLOCK_BUFFER_PERCENT: z.coerce.number().int().nonnegative().optional(),
   AERODROME_API_URL: z.string().url().optional(),
   UNISWAP_API_URL: z.string().url().optional(),
   CURVE_API_URL: z.string().url().optional(),
 });
 
-const env = envSchema.parse(process.env);
+const env = configSchema.parse(process.env);
 
 const gasPriceWei = env.GAS_PRICE_GWEI ? BigInt(Math.round(env.GAS_PRICE_GWEI * 1e9)) : undefined;
+const callbackGasLimit = BigInt(env.BLOCKLOCK_CALLBACK_GAS_LIMIT ?? 300_000);
+
+const provider = new ethers.JsonRpcProvider(env.BASE_SEPOLIA_RPC_URL);
+const wallet = new ethers.Wallet(env.SOLVER_PRIVATE_KEY.startsWith("0x") ? env.SOLVER_PRIVATE_KEY : `0x${env.SOLVER_PRIVATE_KEY}`, provider);
+
+const blocklock = Blocklock.createBaseSepolia(wallet);
 
 const routePlanner = new RoutePlanner({
   connectors: createDefaultConnectors({
@@ -32,30 +50,85 @@ const routePlanner = new RoutePlanner({
   },
 });
 
+async function submitCommitment(intent: SwapIntentDefinition) {
+  const report = await routePlanner.planBestRoute(intent);
+  if (!report) {
+    console.warn("[solver] no profitable routes discovered");
+    return;
+  }
+
+  const payload = {
+    intentId: intent.intentId.toString(),
+    solver: wallet.address,
+    venue: report.venue,
+    amountIn: intent.amountIn.toString(),
+    minAmountOut: intent.minAmountOut.toString(),
+    expectedAmountOut: report.amountOut.toString(),
+    gasCost: report.gasCost.toString(),
+    bridgeFee: report.bridgeFee.toString(),
+    generatedAt: Date.now(),
+  };
+
+  const payloadBytes = new TextEncoder().encode(JSON.stringify(payload));
+  if (payloadBytes.length > 256) {
+    throw new Error("payload exceeds BlockLock 256-byte limit");
+  }
+
+  const latestBlock = await provider.getBlockNumber();
+  const targetBlock = BigInt(latestBlock + 1);
+  const conditionBytes = encodeCondition(targetBlock);
+
+  const ciphertext = blocklock.encrypt(payloadBytes, targetBlock);
+  const encodedCiphertext = encodeCiphertextToSolidity(ciphertext);
+  const solidityCiphertext = {
+    u: {
+      x: [encodedCiphertext.u.x[0], encodedCiphertext.u.x[1]],
+      y: [encodedCiphertext.u.y[0], encodedCiphertext.u.y[1]],
+    },
+    v: ethers.hexlify(encodedCiphertext.v),
+    w: ethers.hexlify(encodedCiphertext.w),
+  };
+
+  const payloadHash = ethers.keccak256(payloadBytes);
+
+  const intentHub = new ethers.Contract(env.INTENT_HUB_ADDRESS, intentHubArtifact.abi, wallet);
+
+  const txn = await intentHub.commitToIntent(
+    intent.intentId,
+    payloadHash,
+    solidityCiphertext,
+    conditionBytes,
+    callbackGasLimit,
+    env.SOLVER_COLLATERAL_WEI,
+    {
+      value: env.SOLVER_COLLATERAL_WEI,
+    },
+  );
+
+  const receipt = await txn.wait();
+  console.log("[solver] commitment submitted", {
+    txHash: receipt?.hash,
+    blockNumber: receipt?.blockNumber,
+  });
+}
+
 async function main() {
-  console.log("[solver] booting with listener", env.LISTENER_URL ?? "<not set>");
+  console.log("[solver] booting", { rpc: env.BASE_SEPOLIA_RPC_URL, intentHub: env.INTENT_HUB_ADDRESS });
 
   const mockIntent: SwapIntentDefinition = {
     intentId: 1n,
     fromToken: zeroAddress,
     toToken: zeroAddress,
-    amountIn: 1_000_000_000_000_000_000n, // 1.0 tokens
+    amountIn: 1_000_000_000_000_000_000n,
     minAmountOut: 950_000_000_000_000_000n,
     sourceChainId: 84532,
     metadata: { deadline: Math.floor(Date.now() / 1000) + 600 },
   };
 
-  const report = await routePlanner.planBestRoute(mockIntent);
-  if (!report) {
-    console.log("[solver] no profitable routes discovered for mock intent");
-    return;
-  }
-
-  console.log("[solver] best route", {
-    venue: report.venue,
-    amountOut: report.amountOut.toString(),
-    netProfit: report.netProfit.toString(),
-  });
+  await submitCommitment(mockIntent);
 }
 
-void main();
+void main().catch((error) => {
+  console.error("[solver] fatal error", error);
+  process.exitCode = 1;
+});
