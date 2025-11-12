@@ -43,7 +43,8 @@
 - ✅ Added `libs/testing/fixtures` for reusable ciphertext + key samples.
 
 ### 4. Off-Chain Services
-- **cipherflow-listener**: ingest intents (CoW/1inch/API), queue management.
+- ✅ Scaffolding for `cipherflow-listener` package (viem-based block polling).
+- **cipherflow-listener**: implement intent ingestion (CoW/1inch/API), queue management.
 - **cipherflow-solver**: route planner spanning DEX/bridges/CEX, BlockLock encryption submission.
 - **cipherflow-executor**: follow reveals, replay swaps, verify outputs, emit metrics.
 - **cipherflow-explorer**: Next.js UI + backend aggregator with reveal playback.
