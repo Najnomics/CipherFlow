@@ -39,8 +39,8 @@
 
 ### 3. Shared Libraries
 - ✅ Implemented `libs/encoding` for canonical payload hash/decoding + Foundry tests.
-- Publish `libs/intent-registry.json` with network/asset configuration templates.
-- Provide `libs/testing/fixtures` for ciphertext + key payload generation.
+- ✅ Published `libs/intent-registry.json` with initial network & asset configuration template.
+- ✅ Added `libs/testing/fixtures` for reusable ciphertext + key samples.
 
 ### 4. Off-Chain Services
 - **cipherflow-listener**: ingest intents (CoW/1inch/API), queue management.
@@ -60,9 +60,8 @@
 - Integrate Metamask Snap (post-MVP) to surface reveals in-wallet.
 
 ## Next Steps
-1. Finish BlockLock subscription management inside `IntentHub`.
-2. Fill out shared libraries for registry + fixtures.
-3. Build out the solver/off-chain stack per architecture plan.
-4. Add CI automation & coverage gates.
-5. Produce final docs/video/demo.
+1. Extend BlockLock subscription flows (auto top-ups, add consumer list) & add remaining admin controls.
+2. Build out the solver/off-chain stack per architecture plan.
+3. Add CI automation & coverage gates.
+4. Produce final docs/video/demo.
 
