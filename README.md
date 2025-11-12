@@ -33,16 +33,6 @@ graph TD
   end
 ```
 
-## Latest Deployments (Base Sepolia)
-| Component            | Address                                      | Tx Hash                                                            |
-|---------------------|----------------------------------------------|--------------------------------------------------------------------|
-| SettlementEscrow    | `0x519e5a60Ef57F6EDB57b73fcB3ea1f0AC954829B` | `0x76b6125c538f1ead13bcab7bf465b7c41e0950342ead6c49c99e37af720c946b` |
-| IntentHub           | `0x67E757507436A64988E4ab772BD6ceB2084a335E` | `0x079d5f05410e8d62f5cd896252273e6f89ee8b9c0dd6422913170603b982b542` |
-| BlockLock Sender\*  | `0x82FeD730CbdeC5A2D8724F2e3b316A70A565E27e` | — (pre-existing network deployment)                                |
-| Deployer/Admin      | `0xfE04736190e62cB338d89B5906d298C9240D0391` | —                                                                  |
-
-\*Official dcipher BlockLock sender proxy for Base Sepolia.
-
 Full troubleshooting steps are documented in `docs/DEPLOYMENTfix.md`.
 
 ## Quick Start
@@ -257,3 +247,13 @@ cast send 0x519e5a60Ef57F6EDB57b73fcB3ea1f0AC954829B \
 - Wire listener/solver/executor packages to real DEX & bridge connectors and integrate BlockLock encryption into the commitment flow.
 - Stand up CI automation (forge fmt/test, pnpm lint/test) and publish nightly artifacts.
 - Build the explorer UI plus guardian/ops service for subscription health and reveal monitoring.
+
+## Deployed Addresses (Base Sepolia)
+| Component            | Address                                      | Tx Hash                                                            |
+|---------------------|----------------------------------------------|--------------------------------------------------------------------|
+| SettlementEscrow    | `0x519e5a60Ef57F6EDB57b73fcB3ea1f0AC954829B` | `0x76b6125c538f1ead13bcab7bf465b7c41e0950342ead6c49c99e37af720c946b` |
+| IntentHub           | `0x67E757507436A64988E4ab772BD6ceB2084a335E` | `0x079d5f05410e8d62f5cd896252273e6f89ee8b9c0dd6422913170603b982b542` |
+| BlockLock Sender\*  | `0x82FeD730CbdeC5A2D8724F2e3b316A70A565E27e` | — (pre-existing network deployment)                                |
+| Deployer/Admin      | `0xfE04736190e62cB338d89B5906d298C9240D0391` | —                                                                  |
+
+\*Official dcipher BlockLock sender proxy for Base Sepolia.
