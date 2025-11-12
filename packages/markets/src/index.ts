@@ -1,12 +1,12 @@
-import { AerodromeConnector } from "./connectors/aerodrome.js";
-import { CurveConnector } from "./connectors/curve.js";
+import { AerodromeConnector, type AerodromeConnectorOptions } from "./connectors/aerodrome.js";
+import { CurveConnector, type CurveConnectorOptions } from "./connectors/curve.js";
 import {
   type ConnectorMap,
   type QuoteConnector,
   parseQuoteRequest,
   sortQuotesDescending,
 } from "./connectors/base.js";
-import { UniswapConnector } from "./connectors/uniswap.js";
+import { UniswapConnector, type UniswapConnectorOptions } from "./connectors/uniswap.js";
 
 export type {
   QuoteRequest,
@@ -24,12 +24,22 @@ export { AerodromeConnector, CurveConnector, UniswapConnector };
 
 export type { QuoteConnector, ConnectorMap } from "./connectors/base.js";
 
-export function createDefaultConnectors(): QuoteConnector[] {
-  return [new AerodromeConnector(), new UniswapConnector(), new CurveConnector()];
+export interface ConnectorFactoryOptions {
+  aerodrome?: AerodromeConnectorOptions;
+  uniswap?: UniswapConnectorOptions;
+  curve?: CurveConnectorOptions;
 }
 
-export function createConnectorMap(): ConnectorMap {
-  return createDefaultConnectors().reduce<ConnectorMap>((acc, connector) => {
+export function createDefaultConnectors(options: ConnectorFactoryOptions = {}): QuoteConnector[] {
+  return [
+    new AerodromeConnector(options.aerodrome),
+    new UniswapConnector(options.uniswap),
+    new CurveConnector(options.curve),
+  ];
+}
+
+export function createConnectorMap(options?: ConnectorFactoryOptions): ConnectorMap {
+  return createDefaultConnectors(options).reduce<ConnectorMap>((acc, connector) => {
     acc[connector.venue] = connector;
     return acc;
   }, {} as ConnectorMap);
