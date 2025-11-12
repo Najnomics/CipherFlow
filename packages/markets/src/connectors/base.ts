@@ -50,5 +50,3 @@ export const bigintFromDecimalString = (value: string | number): bigint => {
   }
   return BigInt(value);
 };
-
-
