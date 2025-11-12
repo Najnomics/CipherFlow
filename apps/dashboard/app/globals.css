@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  @apply bg-slate-950 text-slate-100;
+  font-family: var(--font-sans, system-ui, -apple-system, BlinkMacSystemFont);
+}
+
+a {
+  @apply text-primary hover:underline;
+}
+

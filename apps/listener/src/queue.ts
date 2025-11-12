@@ -27,6 +27,13 @@ export class IntentQueue {
     return this.buffer.length;
   }
 
+  snapshot(limit = this.buffer.length): NormalizedIntent[] {
+    if (limit >= this.buffer.length) {
+      return [...this.buffer];
+    }
+    return this.buffer.slice(-limit);
+  }
+
   onIntent(listener: IntentListener) {
     this.emitter.on("intent", listener);
     return () => this.emitter.off("intent", listener);
