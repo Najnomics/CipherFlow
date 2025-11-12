@@ -44,6 +44,7 @@
 
 ### 4. Off-Chain Services
 - ✅ Scaffolding for `cipherflow-listener` package (viem-based block polling).
+- ✅ Scaffolding for `cipherflow-solver` package (bootstrap script).
 - **cipherflow-listener**: implement intent ingestion (CoW/1inch/API), queue management.
 - **cipherflow-solver**: route planner spanning DEX/bridges/CEX, BlockLock encryption submission.
 - **cipherflow-executor**: follow reveals, replay swaps, verify outputs, emit metrics.
