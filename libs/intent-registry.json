@@ -1,0 +1,24 @@
+{
+  "networks": [
+    {
+      "name": "base-sepolia",
+      "blocklockSender": "0x0000000000000000000000000000000000000000",
+      "settlementAssets": [
+        {
+          "symbol": "ETH",
+          "address": "0x0000000000000000000000000000000000000000",
+          "decimals": 18
+        },
+        {
+          "symbol": "USDC",
+          "address": "0x1F98400000000000000000000000000000000000",
+          "decimals": 6
+        }
+      ],
+      "defaultCommitWindowSeconds": 3600,
+      "defaultRevealDelayBlocks": 1,
+      "defaultExecutionWindowSeconds": 3600
+    }
+  ]
+}
+

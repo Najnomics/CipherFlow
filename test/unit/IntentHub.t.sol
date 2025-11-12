@@ -10,6 +10,7 @@ import {IntentHub} from "../../src/IntentHub.sol";
 import {SettlementEscrow} from "../../src/SettlementEscrow.sol";
 import {IntentHubHarness} from "../utils/IntentHubHarness.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {CiphertextFixtures} from "../../libs/testing/fixtures/CiphertextFixtures.sol";
 
 contract TestToken is ERC20 {
     constructor() ERC20("TestToken", "TTKN") {}
@@ -203,12 +204,7 @@ contract IntentHubTest is Test {
     }
 
     function _dummyCiphertext() internal pure returns (TypesLib.Ciphertext memory cipher) {
-        cipher.u = BLS.PointG2({
-            x: [uint256(1), uint256(2)],
-            y: [uint256(3), uint256(4)]
-        });
-        cipher.v = abi.encodePacked(bytes32(uint256(123)));
-        cipher.w = abi.encodePacked(bytes32(uint256(456)));
+        return CiphertextFixtures.sampleCiphertext();
     }
 
     function _openERC20Intent(uint256 amount) internal returns (uint256 intentId) {
