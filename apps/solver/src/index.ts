@@ -2,7 +2,7 @@ import "dotenv/config";
 import { zeroAddress } from "viem";
 import { z } from "zod";
 
-import { createDefaultConnectors, type SwapIntentDefinition } from "@cipherflow/markets";
+import { createDefaultConnectors, type SwapIntentDefinition, type QuoteConnector } from "@cipherflow/markets";
 import { RoutePlanner } from "./routePlanner.js";
 import { Blocklock, encodeCiphertextToSolidity, encodeCondition } from "blocklock-js";
 import { ethers } from "ethers";
@@ -22,6 +22,7 @@ const configSchema = z.object({
   AERODROME_API_URL: z.string().url().optional(),
   UNISWAP_API_URL: z.string().url().optional(),
   CURVE_API_URL: z.string().url().optional(),
+  MOCK_BRIDGE_CONFIG: z.string().optional(),
 });
 
 const env = configSchema.parse(process.env);
@@ -34,12 +35,15 @@ const wallet = new ethers.Wallet(env.SOLVER_PRIVATE_KEY.startsWith("0x") ? env.S
 
 const blocklock = Blocklock.createBaseSepolia(wallet);
 
+const connectors: QuoteConnector[] = createDefaultConnectors({
+  aerodrome: { apiUrl: env.AERODROME_API_URL },
+  uniswap: { apiUrl: env.UNISWAP_API_URL },
+  curve: { apiUrl: env.CURVE_API_URL },
+  mockBridge: env.MOCK_BRIDGE_CONFIG ? JSON.parse(env.MOCK_BRIDGE_CONFIG) : undefined,
+});
+
 const routePlanner = new RoutePlanner({
-  connectors: createDefaultConnectors({
-    aerodrome: { apiUrl: env.AERODROME_API_URL },
-    uniswap: { apiUrl: env.UNISWAP_API_URL },
-    curve: { apiUrl: env.CURVE_API_URL },
-  }),
+  connectors: connectors,
   gasPriceWei,
   logger: (message, meta) => {
     if (meta) {
