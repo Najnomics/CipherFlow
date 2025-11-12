@@ -12,7 +12,9 @@
     "lint": "forge fmt"
   },
   "dependencies": {
-    "blocklock-solidity": "github:randa-mu/blocklock-solidity#main"
+    "blocklock-solidity": "github:randa-mu/blocklock-solidity#main",
+    "@openzeppelin/contracts": "^5.5.0",
+    "forge-std": "github:foundry-rs/forge-std#v1.10.0"
   },
   "packageManager": "pnpm@9.12.3"
 }
