@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { Address } from "viem";
 
 import type { QuoteRequest, QuoteResult, LiquidityVenue } from "../types.js";
 
@@ -10,10 +11,12 @@ export interface QuoteConnector {
 
 export type ConnectorMap = Record<LiquidityVenue, QuoteConnector>;
 
+const addressSchema = z.string().regex(/^0x[a-fA-F0-9]{40}$/) as unknown as z.ZodType<Address>;
+
 export const quoteRequestSchema = z.object({
   chainId: z.number().int().positive(),
-  fromToken: z.string(),
-  toToken: z.string(),
+  fromToken: addressSchema,
+  toToken: addressSchema,
   amountIn: z.bigint().positive(),
   slippageBps: z.number().int().positive().max(10_000).optional(),
   deadline: z.number().int().positive().optional(),
@@ -37,3 +40,13 @@ export function sortQuotesDescending(quotes: QuoteResult[]): QuoteResult[] {
   });
 }
 
+export const bigintFromDecimalString = (value: string | number): bigint => {
+  if (typeof value === "number") {
+    return BigInt(Math.trunc(value));
+  }
+  if (value.includes(".")) {
+    const [whole] = value.split(".");
+    return BigInt(whole);
+  }
+  return BigInt(value);
+};

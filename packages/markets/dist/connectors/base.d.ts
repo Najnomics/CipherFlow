@@ -8,24 +8,24 @@ export interface QuoteConnector {
 export type ConnectorMap = Record<LiquidityVenue, QuoteConnector>;
 export declare const quoteRequestSchema: z.ZodObject<{
     chainId: z.ZodNumber;
-    fromToken: z.ZodString;
-    toToken: z.ZodString;
+    fromToken: z.ZodType<`0x${string}`, z.ZodTypeDef, `0x${string}`>;
+    toToken: z.ZodType<`0x${string}`, z.ZodTypeDef, `0x${string}`>;
     amountIn: z.ZodBigInt;
     slippageBps: z.ZodOptional<z.ZodNumber>;
     deadline: z.ZodOptional<z.ZodNumber>;
     destinationChainId: z.ZodOptional<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
     chainId: number;
-    fromToken: string;
-    toToken: string;
+    fromToken: `0x${string}`;
+    toToken: `0x${string}`;
     amountIn: bigint;
     slippageBps?: number | undefined;
     deadline?: number | undefined;
     destinationChainId?: number | undefined;
 }, {
     chainId: number;
-    fromToken: string;
-    toToken: string;
+    fromToken: `0x${string}`;
+    toToken: `0x${string}`;
     amountIn: bigint;
     slippageBps?: number | undefined;
     deadline?: number | undefined;
@@ -37,3 +37,4 @@ export declare const quoteRequestSchema: z.ZodObject<{
  */
 export declare function parseQuoteRequest(request: QuoteRequest): QuoteRequest;
 export declare function sortQuotesDescending(quotes: QuoteResult[]): QuoteResult[];
+export declare const bigintFromDecimalString: (value: string | number) => bigint;

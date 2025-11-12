@@ -1,12 +1,15 @@
 import { zeroAddress } from "viem";
 import { z } from "zod";
 
-import type { SwapIntentDefinition } from "@cipherflow/markets";
+import { createDefaultConnectors, type SwapIntentDefinition } from "@cipherflow/markets";
 import { RoutePlanner } from "./routePlanner.js";
 
 const envSchema = z.object({
   LISTENER_URL: z.string().url().optional(),
   GAS_PRICE_GWEI: z.coerce.number().positive().optional(),
+  AERODROME_API_URL: z.string().url().optional(),
+  UNISWAP_API_URL: z.string().url().optional(),
+  CURVE_API_URL: z.string().url().optional(),
 });
 
 const env = envSchema.parse(process.env);
@@ -14,6 +17,11 @@ const env = envSchema.parse(process.env);
 const gasPriceWei = env.GAS_PRICE_GWEI ? BigInt(Math.round(env.GAS_PRICE_GWEI * 1e9)) : undefined;
 
 const routePlanner = new RoutePlanner({
+  connectors: createDefaultConnectors({
+    aerodrome: { apiUrl: env.AERODROME_API_URL },
+    uniswap: { apiUrl: env.UNISWAP_API_URL },
+    curve: { apiUrl: env.CURVE_API_URL },
+  }),
   gasPriceWei,
   logger: (message, meta) => {
     if (meta) {

@@ -51,6 +51,9 @@ importers:
 
   apps/listener:
     dependencies:
+      undici:
+        specifier: ^6.19.8
+        version: 6.22.0
       viem:
         specifier: ^2.10.5
         version: 2.39.0(typescript@5.9.3)(zod@3.25.76)
@@ -107,6 +110,9 @@ importers:
 
   packages/markets:
     dependencies:
+      undici:
+        specifier: ^6.19.8
+        version: 6.22.0
       viem:
         specifier: ^2.10.5
         version: 2.39.0(typescript@5.9.3)(zod@3.25.76)
@@ -114,6 +120,9 @@ importers:
         specifier: ^3.23.8
         version: 3.25.76
     devDependencies:
+      '@types/node':
+        specifier: ^20.12.7
+        version: 20.19.25
       typescript:
         specifier: ^5.4.5
         version: 5.9.3
@@ -2350,6 +2359,10 @@ packages:
   undici@5.29.0:
     resolution: {integrity: sha512-raqeBD6NQK4SkWhQzeYKd1KmIG6dllBOTt55Rmkt4HtI9mwdWtJljnrXjAFUBLTSN67HWrOIZ3EPF4kjUw80Bg==}
     engines: {node: '>=14.0'}
+
+  undici@6.22.0:
+    resolution: {integrity: sha512-hU/10obOIu62MGYjdskASR3CUAiYaFTtC9Pa6vHyf//mAipSvSQg6od2CnJswq7fvzNS3zJhxoRkgNVaHurWKw==}
+    engines: {node: '>=18.17'}
 
   universalify@0.1.2:
     resolution: {integrity: sha512-rBJeI5CXAlmy1pV+617WB9J63U6XcazHHF2f2dbJix4XzpUF0RS3Zbj0FGIOCAva5P/d/GBOYaACQ1w+0azUkg==}
@@ -4886,6 +4899,8 @@ snapshots:
   undici@5.29.0:
     dependencies:
       '@fastify/busboy': 2.1.1
+
+  undici@6.22.0: {}
 
   universalify@0.1.2: {}
 
