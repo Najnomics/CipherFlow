@@ -18,6 +18,10 @@ contract IntentHubHarness is IntentHub {
         return blocklockRequestIds[commitmentId];
     }
 
+    function setSubscriptionIdForTest(uint256 subId) external {
+        subscriptionId = subId;
+    }
+
     function _requestBlocklockWithSubscription(
         uint32,
         bytes memory,

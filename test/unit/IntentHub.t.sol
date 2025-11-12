@@ -34,9 +34,31 @@ contract IntentHubTest is Test {
         token = new TestToken();
 
         escrow.grantIntentHubRole(address(hub));
+        hub.setSubscriptionIdForTest(1);
 
         vm.deal(trader, 100 ether);
         vm.deal(solver, 100 ether);
+    }
+
+    function testCommitRequiresSubscription() external {
+        hub.setSubscriptionIdForTest(0);
+        assertEq(hub.subscriptionId(), 0, "subscription reset");
+
+        uint256 intentId = _openNativeIntent();
+        TypesLib.Ciphertext memory ciphertext = _dummyCiphertext();
+        bytes memory condition = abi.encode("B", block.number + 1);
+        bytes32 payloadHash = keccak256("requires-subscription");
+
+        uint96 collateral = hub.minimumCollateral();
+        uint32 callbackGasLimit = hub.defaultCallbackGasLimit();
+
+        vm.expectRevert(IntentHub.SubscriptionNotInitialized.selector);
+        vm.prank(solver);
+        hub.commitToIntent{value: collateral}(
+            intentId, payloadHash, ciphertext, condition, callbackGasLimit, collateral
+        );
+
+        hub.setSubscriptionIdForTest(1);
     }
 
     function testCommitRevealFlow() external {

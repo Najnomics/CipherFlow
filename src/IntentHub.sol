@@ -91,6 +91,8 @@ contract IntentHub is BlockLockAdapter, AccessControl, ReentrancyGuard {
     event CollateralSlashed(uint256 indexed commitmentId, address indexed beneficiary, uint256 amount);
     event NativeIntentSettled(uint256 indexed intentId, uint256 solverReward, uint256 traderPayout);
     event ERC20IntentSettled(uint256 indexed intentId, address indexed token, uint256 solverReward, uint256 traderPayout);
+    event SubscriptionInitialized(uint256 indexed subscriptionId, uint256 amountFunded);
+    event SubscriptionToppedUp(uint256 indexed subscriptionId, uint256 amount);
 
     error IntentNotOpen(uint256 intentId);
     error DeadlineConfigurationInvalid();
@@ -104,6 +106,8 @@ contract IntentHub is BlockLockAdapter, AccessControl, ReentrancyGuard {
     error SolverOnly(uint256 commitmentId, address solver, address caller);
     error PayloadHashMismatch(uint256 commitmentId);
     error CollateralLocked(uint256 commitmentId);
+    error SubscriptionNotInitialized();
+    error SubscriptionAlreadyInitialized();
 
     constructor(address admin, address blocklockSender, SettlementEscrow escrow) BlockLockAdapter(blocklockSender) {
         SETTLEMENT_ESCROW = escrow;
@@ -131,6 +135,27 @@ contract IntentHub is BlockLockAdapter, AccessControl, ReentrancyGuard {
         require(newTreasury != address(0), "treasury zero");
         treasury = newTreasury;
         emit TreasuryUpdated(newTreasury);
+    }
+
+    function initializeBlocklockSubscription() external payable onlyRole(ADMIN_ROLE) {
+        if (subscriptionId != 0) revert SubscriptionAlreadyInitialized();
+
+        uint256 subId = _subscribe();
+        subscriptionId = subId;
+
+        if (msg.value > 0) {
+            blocklock.fundSubscriptionWithNative{value: msg.value}(subId);
+        }
+
+        emit SubscriptionInitialized(subId, msg.value);
+    }
+
+    function topUpBlocklockSubscription() external payable onlyRole(ADMIN_ROLE) {
+        if (subscriptionId == 0) revert SubscriptionNotInitialized();
+        require(msg.value > 0, "no value");
+
+        blocklock.fundSubscriptionWithNative{value: msg.value}(subscriptionId);
+        emit SubscriptionToppedUp(subscriptionId, msg.value);
     }
 
     // ----------------
@@ -196,6 +221,8 @@ contract IntentHub is BlockLockAdapter, AccessControl, ReentrancyGuard {
         uint32 callbackGasLimit,
         uint96 collateral
     ) external payable nonReentrant returns (uint256 commitmentId) {
+        if (subscriptionId == 0) revert SubscriptionNotInitialized();
+
         IntentTypes.Intent storage intent = _requireIntent(intentId);
         if (intent.state != IntentTypes.AuctionState.Open) revert IntentNotOpen(intentId);
         if (block.timestamp > intent.commitDeadline) revert CommitWindowClosed(intentId);
