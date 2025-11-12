@@ -14,6 +14,7 @@
 - ✅ Foundry + pnpm scaffolding, remappings, package scripts.
 - ✅ Unit tests run via `forge test` (CI integration pending).
 - ✅ Project README updated with architecture plan.
+- ✅ All solidity dependencies pulled via pnpm (`node_modules`) instead of git submodules.
 
 ### Off-Chain (pending)
 - Placeholders for listener/solver/executor/explorer services (TypeScript) – not yet implemented.
