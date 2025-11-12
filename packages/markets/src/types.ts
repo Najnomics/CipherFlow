@@ -2,7 +2,7 @@ import type { Address, Hex } from "viem";
 
 export type ChainId = number;
 
-export type LiquidityVenue = "aerodrome" | "uniswap" | "curve";
+export type LiquidityVenue = "aerodrome" | "uniswap" | "curve" | "mock-bridge";
 
 export interface QuoteRequest {
   chainId: ChainId;

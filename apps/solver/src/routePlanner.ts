@@ -32,20 +32,32 @@ export class RoutePlanner {
       return null;
     }
 
-    const [{ quote }] = quotes;
-    const gasCost = quote.leg.gasEstimate * this.gasPriceWei;
-    const bridgeFee = quote.leg.bridgeFee ?? 0n;
-    const netProfit = quote.leg.expectedAmountOut - intent.amountIn - gasCost - bridgeFee;
+    const best = quotes.reduce<{ quote: QuoteResult; connector: QuoteConnector }>((top, candidate) => {
+      const topNet = this.calculateNetAmount(top.quote.leg, intent.amountIn);
+      const candidateNet = this.calculateNetAmount(candidate.quote.leg, intent.amountIn);
+
+      if (candidateNet > topNet) {
+        return candidate;
+      }
+      if (candidateNet === topNet) {
+        return candidate.quote.leg.gasEstimate < top.quote.leg.gasEstimate ? candidate : top;
+      }
+      return top;
+    }, quotes[0]);
+
+    const gasCost = best.quote.leg.gasEstimate * this.gasPriceWei;
+    const bridgeFee = best.quote.leg.bridgeFee ?? 0n;
+    const netProfit = best.quote.leg.expectedAmountOut - intent.amountIn - gasCost - bridgeFee;
 
     const report: ProfitReport = {
-      venue: quote.leg.venue,
-      amountOut: quote.leg.expectedAmountOut,
+      venue: best.quote.leg.venue,
+      amountOut: best.quote.leg.expectedAmountOut,
       amountIn: intent.amountIn,
       gasCost,
       bridgeFee,
       netProfit,
-      quoteIssuedAt: quote.quoteTimestamp,
-      warnings: quote.warnings,
+      quoteIssuedAt: best.quote.quoteTimestamp,
+      warnings: best.quote.warnings,
     };
 
     this.log?.("[route-planner] selected route", {
@@ -55,6 +67,11 @@ export class RoutePlanner {
     });
 
     return report;
+  }
+
+  private calculateNetAmount(leg: QuoteResult["leg"], amountIn: bigint): bigint {
+    const bridgeFee = leg.bridgeFee ?? 0n;
+    return leg.expectedAmountOut - bridgeFee - amountIn;
   }
 
   private async collectQuotes(intent: SwapIntentDefinition): Promise<Array<{ connector: QuoteConnector; quote: QuoteResult }>> {
@@ -82,15 +99,7 @@ export class RoutePlanner {
       }),
     );
 
-    const filtered = results.filter((entry): entry is { connector: QuoteConnector; quote: QuoteResult } => entry !== null);
-    filtered.sort((a, b) => {
-      if (a.quote.leg.expectedAmountOut === b.quote.leg.expectedAmountOut) {
-        return a.quote.leg.gasEstimate < b.quote.leg.gasEstimate ? -1 : 1;
-      }
-      return a.quote.leg.expectedAmountOut > b.quote.leg.expectedAmountOut ? -1 : 1;
-    });
-
-    return filtered;
+    return results.filter((entry): entry is { connector: QuoteConnector; quote: QuoteResult } => entry !== null);
   }
 }
 
