@@ -16,9 +16,11 @@
 - ✅ Project README updated with architecture plan.
 - ✅ All solidity dependencies pulled via pnpm (`node_modules`) instead of git submodules.
 
-### Off-Chain (pending)
-- Placeholders for listener/solver/executor/explorer services (TypeScript) – not yet implemented.
-- Libraries (`libs/encoding`, `intent-registry`, fixtures) still to come.
+### Off-Chain
+- ✅ `@cipherflow/markets` workspace published with Aerodrome/Uniswap/Curve connector stubs.
+- ✅ Solver route planner scaffolding (profit report, gas-aware scoring) + Vitest smoke test.
+- ✅ Executor service bootstrap reusing connector map with logging + Vitest smoke test.
+- Placeholders for listener/explorer services (TypeScript) – integration still pending.
 
 ## Remaining Scope
 
@@ -42,13 +44,15 @@
 - ✅ Implemented `libs/encoding` for canonical payload hash/decoding + Foundry tests.
 - ✅ Published `libs/intent-registry.json` with initial network & asset configuration template.
 - ✅ Added `libs/testing/fixtures` for reusable ciphertext + key samples.
+- ✅ Added `packages/markets` connector toolkit (stubs today, production integrations pending).
 
 ### 4. Off-Chain Services
 - ✅ Scaffolding for `cipherflow-listener` package (viem-based block polling).
-- ✅ Scaffolding for `cipherflow-solver` package (bootstrap script).
+- ✅ Scaffolding for `cipherflow-solver` package with mock planner + tests.
+- ✅ Scaffolding for `cipherflow-executor` package with mock execution path + tests.
 - **cipherflow-listener**: implement intent ingestion (CoW/1inch/API), queue management.
-- **cipherflow-solver**: route planner spanning DEX/bridges/CEX, BlockLock encryption submission.
-- **cipherflow-executor**: follow reveals, replay swaps, verify outputs, emit metrics.
+- **cipherflow-solver**: replace stub connectors with live Aerodrome/Uniswap/Curve + bridge fees; wire BlockLock encryption + commitment submission.
+- **cipherflow-executor**: hook into on-chain reveals, broadcast settlement transactions via configured relays.
 - **cipherflow-explorer**: Next.js UI + backend aggregator with reveal playback.
 - **ops/guardian**: subscription balance monitoring, top-up automation, fallback to direct funding.
 
@@ -64,7 +68,7 @@
 
 ## Next Steps
 1. Extend BlockLock subscription flows (auto top-ups, add consumer list) & add remaining admin controls.
-2. Build out the solver/off-chain stack per architecture plan.
-3. Add CI automation & coverage gates.
+2. Replace off-chain stub connectors with real pricing/bridge integrations and connect solver↔listener↔executor flows.
+3. Add CI automation & coverage gates (Forge, pnpm workspace tests, lint).
 4. Produce final docs/video/demo.
 

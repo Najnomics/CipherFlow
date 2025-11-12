@@ -23,6 +23,9 @@ importers:
       '@cipherflow/listener':
         specifier: workspace:*
         version: link:../listener
+      '@cipherflow/markets':
+        specifier: workspace:*
+        version: link:../../packages/markets
       viem:
         specifier: ^2.10.5
         version: 2.39.0(typescript@5.9.3)(zod@3.25.76)
@@ -76,6 +79,9 @@ importers:
       '@cipherflow/listener':
         specifier: workspace:*
         version: link:../listener
+      '@cipherflow/markets':
+        specifier: workspace:*
+        version: link:../../packages/markets
       viem:
         specifier: ^2.10.5
         version: 2.39.0(typescript@5.9.3)(zod@3.25.76)
@@ -98,6 +104,19 @@ importers:
       vitest:
         specifier: ^1.5.0
         version: 1.6.1(@types/node@20.19.25)
+
+  packages/markets:
+    dependencies:
+      viem:
+        specifier: ^2.10.5
+        version: 2.39.0(typescript@5.9.3)(zod@3.25.76)
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
+    devDependencies:
+      typescript:
+        specifier: ^5.4.5
+        version: 5.9.3
 
 packages:
 
