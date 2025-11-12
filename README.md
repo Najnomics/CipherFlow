@@ -1,14 +1,81 @@
 # CipherFlow Solver Network
 
-## Mission & Track Alignment
+## Problem We’re Solving
+- Open solver marketplaces leak alpha; copied routes crush profitability.
+- Cross-chain treasury moves and service payments still rely on manual operators.
+- Bidders in existing auctions see each other’s quotes, encouraging copy trading and frontrunning.
+- Treasury managers lack a single pane of glass to audit solver performance or price improvement.
+
+## Our Solution
+CipherFlow is an agentic solver network that keeps trading while you sleep.  
+We ingest user intents, encrypt solver routes with dcipher’s BlockLock, and reveal them only after the auction closes. Collateral and escrow guarantees keep funds safe, while automation handles cross-chain bridges and settlement.
+
+### Mission & Track Alignment
 - **Hackathon track**: Super Solvers (Track B) — sealed-bid auctions, encrypted intents, solver competition visualisation.
 - **Core idea**: AI-assisted solver submits BlockLock-encrypted swap routes into a deterministic on-chain auction. Decryption happens after bidding closes, guaranteeing fairness while enabling sophisticated, cross-domain execution.
 - **Success criteria**:
-  1. Showcase sealed bids using `blocklock-solidity` primitives.
+  1. Showcase sealed bids using `blocklock-solidity`.
   2. Deliver measurable price improvement over public swap routes.
-  3. Demonstrate real-time explorer + replayable devnet for judges.
+  3. Present real-time explorer & replayable devnet for judges.
 
-## High-Level Architecture
+## User Flow (from a trader’s perspective)
+```mermaid
+graph TD
+  subgraph User Journey
+    A[Trader submits intent\n(via API/UI)] --> B(IntentHub\ndeploys auction)
+    B --> C(Commitment Open\nwindow)
+    C --> D{Solver Agents}
+    D -->|Encrypt route + collateral| E[BlockLock Network]
+    E -->|Reveal key block.number + 1| B
+    B --> F[SettlementEscrow\nholds trader funds]
+    D --> G[Executor Bot\nruns settlement]
+    G --> H[Reveal Explorer\nshows price improvement]
+  end
+```
+
+Full troubleshooting steps are documented in `docs/DEPLOYMENTfix.md`.
+
+## Quick Start
+```bash
+pnpm install
+forge test
+```
+
+Generate the onlyswaps harness (optional, requires a fork-capable RPC):
+```bash
+pnpm --filter @cipherflow/solver fetch:onlyswaps
+```
+
+Example Base Sepolia deployment flow (update addresses as needed):
+```bash
+export BASE_SEPOLIA_RPC_URL=https://base-sepolia.g.alchemy.com/v2/<key>
+export PRIVATE_KEY=0x<64_hex_key>
+
+# 1. SettlementEscrow
+forge create --rpc-url $BASE_SEPOLIA_RPC_URL \
+  --private-key $PRIVATE_KEY \
+  --legacy --broadcast \
+  src/SettlementEscrow.sol:SettlementEscrow \
+  --constructor-args 0xfE04736190e62cB338d89B5906d298C9240D0391
+
+# 2. IntentHub (pass the escrow address from step 1)
+forge create --rpc-url $BASE_SEPOLIA_RPC_URL \
+  --private-key $PRIVATE_KEY \
+  --legacy --broadcast \
+  src/IntentHub.sol:IntentHub \
+  --constructor-args \
+    0xfE04736190e62cB338d89B5906d298C9240D0391 \
+    0x82FeD730CbdeC5A2D8724F2e3b316A70A565E27e \
+    0x519e5a60Ef57F6EDB57b73fcB3ea1f0AC954829B
+
+# 3. Grant the IntentHub access to the escrow
+cast send 0x519e5a60Ef57F6EDB57b73fcB3ea1f0AC954829B \
+  "grantIntentHubRole(address)" 0x67E757507436A64988E4ab772BD6ceB2084a335E \
+  --rpc-url $BASE_SEPOLIA_RPC_URL \
+  --private-key $PRIVATE_KEY
+```
+
+## System Architecture
 ```
 ┌────────────────────┐      ┌───────────────────────┐
 │  Intent Sources     │─RPC─▶│  CipherFlow Listener  │
@@ -96,9 +163,9 @@
    - Auto-refills subscription or falls back to direct funding.
 
 ### Shared Libraries
-- **`libs/encoding`** (planned): canonical serialization of solver payloads to avoid reveal mismatches.
-- **`libs/intent-registry.json`** (planned): network-specific config (BlockLock sender address, auction timing, supported tokens).
-- **`libs/testing/fixtures`** (planned): sample ciphertexts, stub decrypt keys for unit testing contracts.
+- **`libs/encoding`**: canonical serialization of solver payloads plus Foundry tests that enforce hashing compatibility.
+- **`libs/intent-registry.json`**: network-specific config template (BlockLock sender, supported assets, timing defaults).
+- **`libs/testing/fixtures`**: reusable ciphertext + key samples, including the onlyswaps token harness captured via the solver script.
 
 ## Data Flow
 1. **Intent ingestion**: trader signs an `Intent` with execution bounds; posted to `IntentHub` via API or direct tx.
@@ -176,7 +243,17 @@
 4. **Submission**: GitHub repo, README (this file), deployment scripts, demo video, deployed testnet addresses, judge wallet.
 
 ## Next Steps
-- Flesh out settlement flows (ERC20 support, collateral slashing).
-- Build Foundry test suite covering commit → reveal → execution paths.
-- Spin up solver bot skeleton with encrypted commitments.
-- Build explorer UI with real-time reveal visualisation.
+- Extend BlockLock subscription automation (add/remove consumers, auto top-ups) and emit richer analytics events.
+- Wire listener/solver/executor packages to real DEX & bridge connectors and integrate BlockLock encryption into the commitment flow.
+- Stand up CI automation (forge fmt/test, pnpm lint/test) and publish nightly artifacts.
+- Build the explorer UI plus guardian/ops service for subscription health and reveal monitoring.
+
+## Deployed Addresses (Base Sepolia)
+| Component            | Address                                      | Tx Hash                                                            |
+|---------------------|----------------------------------------------|--------------------------------------------------------------------|
+| SettlementEscrow    | `0x519e5a60Ef57F6EDB57b73fcB3ea1f0AC954829B` | `0x76b6125c538f1ead13bcab7bf465b7c41e0950342ead6c49c99e37af720c946b` |
+| IntentHub           | `0x67E757507436A64988E4ab772BD6ceB2084a335E` | `0x079d5f05410e8d62f5cd896252273e6f89ee8b9c0dd6422913170603b982b542` |
+| BlockLock Sender\*  | `0x82FeD730CbdeC5A2D8724F2e3b316A70A565E27e` | — (pre-existing network deployment)                                |
+| Deployer/Admin      | `0xfE04736190e62cB338d89B5906d298C9240D0391` | —                                                                  |
+
+\*Official dcipher BlockLock sender proxy for Base Sepolia.

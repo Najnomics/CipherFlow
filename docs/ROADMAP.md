@@ -9,6 +9,7 @@
 - ✅ Treasury slot / admin-configurable collateral slashing, plus native & ERC20 settlement distribution.
 - ✅ BlockLock subscription initialization + gating so commitments require funded subscription.
 - ✅ Foundry tests cover commit→reveal, slashing, settlement, and escrow permit logic.
+- ✅ Base Sepolia deployment: `SettlementEscrow` at `0x519e5a60Ef57F6EDB57b73fcB3ea1f0AC954829B`, `IntentHub` at `0x67E757507436A64988E4ab772BD6ceB2084a335E`, BlockLock sender `0x82FeD730CbdeC5A2D8724F2e3b316A70A565E27e`.
 
 ### Tooling
 - ✅ Foundry + pnpm scaffolding, remappings, package scripts.
@@ -23,18 +24,18 @@
 - ✅ Solver route planner scaffolding (profit report, gas-aware scoring) + Vitest smoke test.
 - ✅ Executor service bootstrap reusing connector map with logging + Vitest smoke test.
 - Placeholders for listener/explorer services (TypeScript) – integration still pending.
+- ✅ Deployment fix notes captured in `docs/DEPLOYMENTfix.md` for reproducible flows.
 
 ## Remaining Scope
 
 ### 1. On-Chain Enhancements
 - **IntentHub**
-  - Subscription setup & management for BlockLock (create/fund/add consumer).
-  - Enhanced risk controls (price threshold checks via oracle feeds, optional).
-  - Admin ops to pause or reconfigure solver collateral profiles.
-  - Outcome metrics emitter for off-chain analytics.
+  - Finalise subscription automation (consumer lists, auto top-ups, buffer withdrawal policy).
+  - Enhanced risk controls (price/oracle thresholds, optional dynamic collateral).
+  - Emit richer analytics events (collateral release/slash, settlement deltas).
 - **SettlementEscrow**
-  - Additional token distribution features (pull-based solver claims, optional streaming).
-  - Collateral slashing events tied to performance metrics.
+  - Additional distribution helpers (pull-based solver claims, optional streaming).
+  - Collateral slash telemetry wired to analytics pipelines.
 
 ### 2. Testing & QA
 - Benchmark native vs ERC20 flows across success/failure scenarios.
@@ -69,8 +70,8 @@
 - Integrate Metamask Snap (post-MVP) to surface reveals in-wallet.
 
 ## Next Steps
-1. Extend BlockLock subscription flows (auto top-ups, add consumer list) & add remaining admin controls.
+1. Extend BlockLock subscription flows (auto top-ups, add/remove consumers) & emit richer analytics.
 2. Replace off-chain stub connectors with real pricing/bridge integrations and connect solver↔listener↔executor flows.
-3. Add CI automation & coverage gates (Forge, pnpm workspace tests, lint).
-4. Produce final docs/video/demo.
+3. Add CI automation & coverage gates (Forge, pnpm workspace tests, lint) plus publish nightly artifacts.
+4. Produce final docs/demo assets and build explorer + guardian surfaces.
 
