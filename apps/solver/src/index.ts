@@ -1,12 +1,55 @@
 import "dotenv/config";
 import { zeroAddress } from "viem";
 import { z } from "zod";
+import { promises as fs } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { randomUUID } from "node:crypto";
 
 import { createDefaultConnectors, type SwapIntentDefinition, type QuoteConnector } from "@cipherflow/markets";
 import { RoutePlanner } from "./routePlanner.js";
 import { Blocklock, encodeCiphertextToSolidity, encodeCondition } from "blocklock-js";
 import { ethers } from "ethers";
 import intentHubArtifact from "../../../out/IntentHub.sol/IntentHub.json" assert { type: "json" };
+
+interface SolverTelemetryEntry {
+  id: string;
+  intentId: string;
+  venue: string;
+  venueLabel?: string;
+  amountIn: string;
+  amountOut: string;
+  gasCost: string;
+  bridgeFee: string;
+  netProfit: string;
+  timestamp: number;
+  status: "planned" | "committed" | "failed";
+  txHash?: string;
+  warnings?: string[];
+  error?: string;
+}
+
+const TELEMETRY_FILE_PATH = resolve(
+  process.cwd(),
+  process.env.SOLVER_TELEMETRY_FILE ?? "../.cache/solver-telemetry.json",
+);
+
+async function recordTelemetry(entry: SolverTelemetryEntry) {
+  try {
+    await fs.mkdir(dirname(TELEMETRY_FILE_PATH), { recursive: true });
+    let existing: SolverTelemetryEntry[] = [];
+    try {
+      const raw = await fs.readFile(TELEMETRY_FILE_PATH, "utf8");
+      existing = JSON.parse(raw) as SolverTelemetryEntry[];
+    } catch {}
+    existing.unshift(entry);
+    if (existing.length > 50) {
+      existing = existing.slice(0, 50);
+    }
+    await fs.writeFile(TELEMETRY_FILE_PATH, JSON.stringify(existing, null, 2), "utf8");
+  } catch (error) {
+    console.warn("[solver] telemetry write failed", error);
+  }
+}
 
 const configSchema = z.object({
   BASE_SEPOLIA_RPC_URL: z.string().url(),
@@ -61,6 +104,23 @@ async function submitCommitment(intent: SwapIntentDefinition) {
     return;
   }
 
+  const telemetryBase = {
+    id: randomUUID(),
+    intentId: intent.intentId.toString(),
+    venue: report.venue,
+    amountIn: intent.amountIn.toString(),
+    amountOut: report.amountOut.toString(),
+    gasCost: report.gasCost.toString(),
+    bridgeFee: report.bridgeFee.toString(),
+    netProfit: report.netProfit.toString(),
+  } satisfies Omit<SolverTelemetryEntry, "status" | "timestamp">;
+
+  await recordTelemetry({
+    ...telemetryBase,
+    timestamp: Date.now(),
+    status: "planned",
+  });
+
   const payload = {
     i: intent.intentId.toString(),
     s: wallet.address,
@@ -75,45 +135,69 @@ async function submitCommitment(intent: SwapIntentDefinition) {
 
   const payloadBytes = new TextEncoder().encode(JSON.stringify(payload));
   if (payloadBytes.length > 256) {
-    throw new Error("payload exceeds BlockLock 256-byte limit");
+    const error = new Error("payload exceeds BlockLock 256-byte limit");
+    await recordTelemetry({
+      ...telemetryBase,
+      timestamp: Date.now(),
+      status: "failed",
+      error: error.message,
+    });
+    throw error;
   }
 
-  const latestBlock = await provider.getBlockNumber();
-  const targetBlock = BigInt(latestBlock + 1);
-  const conditionBytes = encodeCondition(targetBlock);
+  try {
+    const latestBlock = await provider.getBlockNumber();
+    const targetBlock = BigInt(latestBlock + 1);
+    const conditionBytes = encodeCondition(targetBlock);
 
-  const ciphertext = blocklock.encrypt(payloadBytes, targetBlock);
-  const encodedCiphertext = encodeCiphertextToSolidity(ciphertext);
-  const solidityCiphertext = {
-    u: {
-      x: [encodedCiphertext.u.x[0], encodedCiphertext.u.x[1]],
-      y: [encodedCiphertext.u.y[0], encodedCiphertext.u.y[1]],
-    },
-    v: ethers.hexlify(encodedCiphertext.v),
-    w: ethers.hexlify(encodedCiphertext.w),
-  };
+    const ciphertext = blocklock.encrypt(payloadBytes, targetBlock);
+    const encodedCiphertext = encodeCiphertextToSolidity(ciphertext);
+    const solidityCiphertext = {
+      u: {
+        x: [encodedCiphertext.u.x[0], encodedCiphertext.u.x[1]],
+        y: [encodedCiphertext.u.y[0], encodedCiphertext.u.y[1]],
+      },
+      v: ethers.hexlify(encodedCiphertext.v),
+      w: ethers.hexlify(encodedCiphertext.w),
+    };
 
-  const payloadHash = ethers.keccak256(payloadBytes);
+    const payloadHash = ethers.keccak256(payloadBytes);
 
-  const intentHub = new ethers.Contract(env.INTENT_HUB_ADDRESS, intentHubArtifact.abi, wallet);
+    const intentHub = new ethers.Contract(env.INTENT_HUB_ADDRESS, intentHubArtifact.abi, wallet);
 
-  const txn = await intentHub.commitToIntent(
-    intent.intentId,
-    payloadHash,
-    solidityCiphertext,
-    conditionBytes,
-    callbackGasLimit,
-    env.SOLVER_COLLATERAL_WEI,
-    {
-      value: env.SOLVER_COLLATERAL_WEI,
-    },
-  );
+    const txn = await intentHub.commitToIntent(
+      intent.intentId,
+      payloadHash,
+      solidityCiphertext,
+      conditionBytes,
+      callbackGasLimit,
+      env.SOLVER_COLLATERAL_WEI,
+      {
+        value: env.SOLVER_COLLATERAL_WEI,
+      },
+    );
 
-  const receipt = await txn.wait();
-  console.log("[solver] commitment submitted", {
-    txHash: receipt?.hash,
-    blockNumber: receipt?.blockNumber,
-  });
+    const receipt = await txn.wait();
+    console.log("[solver] commitment submitted", {
+      txHash: receipt?.hash,
+      blockNumber: receipt?.blockNumber,
+    });
+
+    await recordTelemetry({
+      ...telemetryBase,
+      timestamp: Date.now(),
+      status: "committed",
+      txHash: receipt?.hash,
+    });
+  } catch (error) {
+    await recordTelemetry({
+      ...telemetryBase,
+      timestamp: Date.now(),
+      status: "failed",
+      error: error instanceof Error ? error.message : String(error),
+    });
+    throw error;
+  }
 }
 
 async function main() {
