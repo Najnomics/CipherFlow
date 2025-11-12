@@ -26,10 +26,14 @@ queue.onIntent((intent) => {
 });
 
 const sources = [
-  new CowSource(env.COW_API_URL),
-  new OneInchSource(env.ONEINCH_API_URL),
   new ManualSource(env.MANUAL_INTENT_URL),
 ];
+if (env.COW_API_URL) {
+  sources.push(new CowSource(env.COW_API_URL));
+}
+if (env.ONEINCH_API_URL) {
+  sources.push(new OneInchSource(env.ONEINCH_API_URL));
+}
 
 const ingestion = new IngestionService(
   sources,
