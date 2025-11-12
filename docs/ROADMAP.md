@@ -7,6 +7,7 @@
 - ✅ Deposits support native and ERC20 flows, including EIP-2612 permits and collateral tracking.
 - ✅ Commitment flow integrated with BlockLock harness for sealed bids and reveal callbacks.
 - ✅ Treasury slot / admin-configurable collateral slashing, plus native & ERC20 settlement distribution.
+- ✅ BlockLock subscription initialization + gating so commitments require funded subscription.
 - ✅ Foundry tests cover commit→reveal, slashing, settlement, and escrow permit logic.
 
 ### Tooling
