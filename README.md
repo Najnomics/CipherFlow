@@ -1,12 +1,37 @@
 # CipherFlow Solver Network
 
-## Mission & Track Alignment
+## Problem We’re Solving
+- Open solver marketplaces leak alpha; copied routes crush profitability.
+- Cross-chain treasury moves and service payments still rely on manual operators.
+- Bidders in existing auctions see each other’s quotes, encouraging copy trading and frontrunning.
+- Treasury managers lack a single pane of glass to audit solver performance or price improvement.
+
+## Our Solution
+CipherFlow is an agentic solver network that keeps trading while you sleep.  
+We ingest user intents, encrypt solver routes with dcipher’s BlockLock, and reveal them only after the auction closes. Collateral and escrow guarantees keep funds safe, while automation handles cross-chain bridges and settlement.
+
+### Mission & Track Alignment
 - **Hackathon track**: Super Solvers (Track B) — sealed-bid auctions, encrypted intents, solver competition visualisation.
 - **Core idea**: AI-assisted solver submits BlockLock-encrypted swap routes into a deterministic on-chain auction. Decryption happens after bidding closes, guaranteeing fairness while enabling sophisticated, cross-domain execution.
 - **Success criteria**:
-  1. Showcase sealed bids using `blocklock-solidity` primitives.
+  1. Showcase sealed bids using `blocklock-solidity`.
   2. Deliver measurable price improvement over public swap routes.
-  3. Demonstrate real-time explorer + replayable devnet for judges.
+  3. Present real-time explorer & replayable devnet for judges.
+
+## User Flow (from a trader’s perspective)
+```mermaid
+graph TD
+  subgraph User Journey
+    A[Trader submits intent\n(via API/UI)] --> B(IntentHub\ndeploys auction)
+    B --> C(Commitment Open\nwindow)
+    C --> D{Solver Agents}
+    D -->|Encrypt route + collateral| E[BlockLock Network]
+    E -->|Reveal key block.number + 1| B
+    B --> F[SettlementEscrow\nholds trader funds]
+    D --> G[Executor Bot\nruns settlement]
+    G --> H[Reveal Explorer\nshows price improvement]
+  end
+```
 
 ## Latest Deployments (Base Sepolia)
 | Component            | Address                                      | Tx Hash                                                            |
@@ -60,7 +85,7 @@ cast send 0x519e5a60Ef57F6EDB57b73fcB3ea1f0AC954829B \
   --private-key $PRIVATE_KEY
 ```
 
-## High-Level Architecture
+## System Architecture
 ```
 ┌────────────────────┐      ┌───────────────────────┐
 │  Intent Sources     │─RPC─▶│  CipherFlow Listener  │
