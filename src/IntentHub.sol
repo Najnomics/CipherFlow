@@ -24,6 +24,11 @@ contract IntentHub is BlockLockAdapter, AccessControl, ReentrancyGuard {
         Subscription
     }
 
+    enum ExpiryReason {
+        RevealTimeout,
+        ExecutionTimeout
+    }
+
     struct IntentConfig {
         address settlementAsset;
         address recipient;
@@ -93,6 +98,9 @@ contract IntentHub is BlockLockAdapter, AccessControl, ReentrancyGuard {
     event ERC20IntentSettled(uint256 indexed intentId, address indexed token, uint256 solverReward, uint256 traderPayout);
     event SubscriptionInitialized(uint256 indexed subscriptionId, uint256 amountFunded);
     event SubscriptionToppedUp(uint256 indexed subscriptionId, uint256 amount);
+    event CommitmentExpired(
+        uint256 indexed intentId, uint256 indexed commitmentId, ExpiryReason reason, uint256 collateralForfeited
+    );
 
     error IntentNotOpen(uint256 intentId);
     error DeadlineConfigurationInvalid();
@@ -108,6 +116,8 @@ contract IntentHub is BlockLockAdapter, AccessControl, ReentrancyGuard {
     error CollateralLocked(uint256 commitmentId);
     error SubscriptionNotInitialized();
     error SubscriptionAlreadyInitialized();
+    error RevealWindowStillOpen(uint256 commitmentId, uint64 deadline);
+    error ExecutionWindowStillOpen(uint256 commitmentId, uint64 deadline);
 
     constructor(address admin, address blocklockSender, SettlementEscrow escrow) BlockLockAdapter(blocklockSender) {
         SETTLEMENT_ESCROW = escrow;
@@ -299,6 +309,30 @@ contract IntentHub is BlockLockAdapter, AccessControl, ReentrancyGuard {
         emit CollateralSlashed(commitmentId, payout, amount);
     }
 
+    function expireCommitment(uint256 commitmentId) external nonReentrant onlyRole(ADMIN_ROLE) {
+        CommitmentRecord storage record = _requireCommitment(commitmentId);
+        IntentTypes.Commitment storage commitment = record.commitment;
+        IntentTypes.Intent storage intent = intents[record.intentId];
+
+        if (commitment.state == IntentTypes.CommitmentState.PendingReveal) {
+            if (block.timestamp <= intent.revealDeadline) {
+                revert RevealWindowStillOpen(commitmentId, intent.revealDeadline);
+            }
+            _expireCommitment(commitmentId, record, intent, ExpiryReason.RevealTimeout);
+            return;
+        }
+
+        if (commitment.state == IntentTypes.CommitmentState.RevealReady) {
+            if (block.timestamp <= intent.executionDeadline) {
+                revert ExecutionWindowStillOpen(commitmentId, intent.executionDeadline);
+            }
+            _expireCommitment(commitmentId, record, intent, ExpiryReason.ExecutionTimeout);
+            return;
+        }
+
+        revert CommitmentStateInvalid(commitmentId, IntentTypes.CommitmentState.PendingReveal);
+    }
+
     function recordExecution(
         uint256 commitmentId,
         uint256 amountOut,
@@ -429,6 +463,12 @@ contract IntentHub is BlockLockAdapter, AccessControl, ReentrancyGuard {
             revert CommitmentStateInvalid(commitmentId, IntentTypes.CommitmentState.PendingReveal);
         }
 
+        IntentTypes.Intent storage intent = intents[record.intentId];
+        if (block.timestamp > intent.revealDeadline) {
+            _expireCommitment(commitmentId, record, intent, ExpiryReason.RevealTimeout);
+            return;
+        }
+
         bytes memory plaintext = _decodePayload(record.ciphertext, decryptionKey);
         if (keccak256(plaintext) != commitment.payloadHash) {
             revert PayloadHashMismatch(commitmentId);
@@ -441,7 +481,6 @@ contract IntentHub is BlockLockAdapter, AccessControl, ReentrancyGuard {
         record.reveal.decryptionKey = decryptionKey;
         record.reveal.revealedAt = block.timestamp.toUint64();
 
-        IntentTypes.Intent storage intent = intents[record.intentId];
         if (intent.state == IntentTypes.AuctionState.Open) {
             intent.state = IntentTypes.AuctionState.Revealed;
         }
@@ -493,6 +532,51 @@ contract IntentHub is BlockLockAdapter, AccessControl, ReentrancyGuard {
         returns (bytes memory)
     {
         return _decrypt(ciphertext, decryptionKey);
+    }
+
+    function _expireCommitment(
+        uint256 commitmentId,
+        CommitmentRecord storage record,
+        IntentTypes.Intent storage intent,
+        ExpiryReason reason
+    ) internal {
+        IntentTypes.Commitment storage commitment = record.commitment;
+        if (
+            commitment.state != IntentTypes.CommitmentState.PendingReveal
+                && commitment.state != IntentTypes.CommitmentState.RevealReady
+        ) {
+            revert CommitmentStateInvalid(commitmentId, IntentTypes.CommitmentState.PendingReveal);
+        }
+
+        uint256 requestId = blocklockRequestIds[commitmentId];
+        if (requestId != 0) {
+            delete blocklockRequestToCommitment[requestId];
+        }
+        _clearBlocklockReference(commitmentId);
+
+        commitment.state = IntentTypes.CommitmentState.Expired;
+        commitment.blocklockRequestId = 0;
+
+        uint256 forfeited = _forfeitCollateral(commitmentId, treasury);
+
+        if (
+            reason == ExpiryReason.ExecutionTimeout && intent.executionDeadline < block.timestamp
+                && intent.state != IntentTypes.AuctionState.Settled && intent.state != IntentTypes.AuctionState.Cancelled
+        ) {
+            intent.state = IntentTypes.AuctionState.Expired;
+        }
+
+        emit CommitmentExpired(record.intentId, commitmentId, reason, forfeited);
+    }
+
+    function _forfeitCollateral(uint256 commitmentId, address beneficiary) internal returns (uint256 amount) {
+        amount = collateralNative[commitmentId];
+        if (amount == 0) return 0;
+
+        collateralNative[commitmentId] = 0;
+
+        (bool success,) = payable(beneficiary).call{value: amount}("");
+        require(success, "collateral transfer failed");
     }
 }
 

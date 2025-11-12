@@ -168,6 +168,82 @@ contract IntentHubTest is Test {
         assertEq(hub.getIntent(intentId).amountIn, 0, "intent token cleared");
     }
 
+    function testExpirePendingRevealAfterDeadlineSlashesCollateral() external {
+        address treasuryBeneficiary = address(0xFEE1);
+        vm.prank(admin);
+        hub.setTreasury(treasuryBeneficiary);
+
+        uint256 intentId = _openNativeIntent();
+        TypesLib.Ciphertext memory ciphertext = _dummyCiphertext();
+        bytes memory condition = abi.encode("B", block.number + 1);
+        bytes32 payloadHash = keccak256("pending-reveal-expire");
+
+        uint256 commitmentId =
+            _commitIntent(intentId, payloadHash, ciphertext, condition, hub.defaultCallbackGasLimit());
+
+        uint64 revealDeadline = hub.getIntent(intentId).revealDeadline;
+        vm.warp(uint256(revealDeadline) + 1);
+
+        uint256 treasuryBefore = treasuryBeneficiary.balance;
+        uint256 collateral = hub.minimumCollateral();
+
+        vm.prank(admin);
+        hub.expireCommitment(commitmentId);
+
+        IntentHub.CommitmentRecord memory record = hub.getCommitment(commitmentId);
+        assertEq(uint8(record.commitment.state), uint8(IntentTypes.CommitmentState.Expired), "expired state");
+        assertEq(hub.getCollateralBalance(commitmentId), 0, "collateral cleared");
+        assertEq(treasuryBeneficiary.balance, treasuryBefore + collateral, "treasury credited");
+    }
+
+    function testExpirePendingRevealBeforeDeadlineReverts() external {
+        uint256 intentId = _openNativeIntent();
+        TypesLib.Ciphertext memory ciphertext = _dummyCiphertext();
+        bytes memory condition = abi.encode("B", block.number + 1);
+        bytes32 payloadHash = keccak256("reveal-window-open");
+
+        uint256 commitmentId =
+            _commitIntent(intentId, payloadHash, ciphertext, condition, hub.defaultCallbackGasLimit());
+
+        uint64 revealDeadline = hub.getIntent(intentId).revealDeadline;
+
+        vm.expectRevert(abi.encodeWithSelector(IntentHub.RevealWindowStillOpen.selector, commitmentId, revealDeadline));
+        vm.prank(admin);
+        hub.expireCommitment(commitmentId);
+    }
+
+    function testExpireRevealReadyAfterExecutionDeadline() external {
+        address treasuryBeneficiary = address(0xFEE2);
+        vm.prank(admin);
+        hub.setTreasury(treasuryBeneficiary);
+
+        uint256 intentId = _openNativeIntent();
+        TypesLib.Ciphertext memory ciphertext = _dummyCiphertext();
+        bytes memory condition = abi.encode("B", block.number + 1);
+        bytes memory decryptedPayload = abi.encodePacked("execution-deadline");
+        bytes32 payloadHash = keccak256(decryptedPayload);
+
+        uint256 commitmentId =
+            _commitIntent(intentId, payloadHash, ciphertext, condition, hub.defaultCallbackGasLimit());
+        uint256 requestId = hub.getRequestId(commitmentId);
+        hub.simulateBlocklockCallback(requestId, decryptedPayload);
+
+        uint256 treasuryBefore = treasuryBeneficiary.balance;
+        uint256 collateral = hub.minimumCollateral();
+        uint64 executionDeadline = hub.getIntent(intentId).executionDeadline;
+
+        vm.warp(uint256(executionDeadline) + 1);
+
+        vm.prank(admin);
+        hub.expireCommitment(commitmentId);
+
+        IntentHub.CommitmentRecord memory record = hub.getCommitment(commitmentId);
+        assertEq(uint8(record.commitment.state), uint8(IntentTypes.CommitmentState.Expired), "expired after execution");
+        assertEq(hub.getCollateralBalance(commitmentId), 0, "collateral zero after execution expiry");
+        assertEq(treasuryBeneficiary.balance, treasuryBefore + collateral, "treasury credited");
+        assertEq(uint8(hub.getIntent(intentId).state), uint8(IntentTypes.AuctionState.Expired), "intent expired");
+    }
+
     function _openNativeIntent() internal returns (uint256 intentId) {
         vm.startPrank(trader);
         uint64 commitDeadline = uint64(block.timestamp + 1 hours);
