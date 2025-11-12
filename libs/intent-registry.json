@@ -13,6 +13,30 @@
           "symbol": "USDC",
           "address": "0x1F98400000000000000000000000000000000000",
           "decimals": 6
+        },
+        {
+          "symbol": "RUSD",
+          "address": "0x908e1D85604E0e9E703d52D18f3F3F604fE7Bb1B",
+          "decimals": 18
+        }
+      ],
+      "defaultCommitWindowSeconds": 3600,
+      "defaultRevealDelayBlocks": 1,
+      "defaultExecutionWindowSeconds": 3600
+    },
+    {
+      "name": "avalanche-fuji",
+      "blocklockSender": "0x0000000000000000000000000000000000000000",
+      "settlementAssets": [
+        {
+          "symbol": "AVAX",
+          "address": "0x0000000000000000000000000000000000000000",
+          "decimals": 18
+        },
+        {
+          "symbol": "RUSD",
+          "address": "0x908e1D85604E0e9E703d52D18f3F3F604fE7Bb1B",
+          "decimals": 18
         }
       ],
       "defaultCommitWindowSeconds": 3600,

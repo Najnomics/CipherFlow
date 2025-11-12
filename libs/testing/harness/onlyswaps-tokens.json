@@ -1,0 +1,45 @@
+{
+  "source": "omo/onlyswaps-solidity",
+  "generatedAt": "2025-11-12T00:00:00Z",
+  "routerProxy": "0x3dD1a497846d060Dce130B67b22E1F9dEE18c051",
+  "assets": [
+    {
+      "chainId": 84532,
+      "token": {
+        "symbol": "RUSD",
+        "address": "0x908e1D85604E0e9E703d52D18f3F3F604fE7Bb1B",
+        "decimals": 18,
+        "faucetAmount": "1000000000000000000000"
+      },
+      "permitDestinationTx": "0x086433f174256befedc49df14d4a4a99d49d621a0bf53b83ff0b6bbea63a277d",
+      "setTokenMappingTx": "0xa7e7bfdd379d68db55f8f84b945514fd779e90e4c3c0d88ef16eb8a2c73cf4eb",
+      "destinations": [
+        {
+          "dstChainId": 43113,
+          "dstToken": "0x908e1D85604E0e9E703d52D18f3F3F604fE7Bb1B",
+          "transactionHash": "0xa7e7bfdd379d68db55f8f84b945514fd779e90e4c3c0d88ef16eb8a2c73cf4eb"
+        }
+      ]
+    },
+    {
+      "chainId": 43113,
+      "token": {
+        "symbol": "RUSD",
+        "address": "0x908e1D85604E0e9E703d52D18f3F3F604fE7Bb1B",
+        "decimals": 18,
+        "faucetAmount": "1000000000000000000000"
+      },
+      "permitDestinationTx": "0x3efdd75ba3653dad8775cf6b654cb3718dd5e1ff80f062d974042b5e5700b05b",
+      "setTokenMappingTx": "0xc0d632fd5506729bb9f597193ff7cecb92e3ffeb6bea8cafb849187c54219ed7",
+      "destinations": [
+        {
+          "dstChainId": 84532,
+          "dstToken": "0x908e1D85604E0e9E703d52D18f3F3F604fE7Bb1B",
+          "transactionHash": "0xc0d632fd5506729bb9f597193ff7cecb92e3ffeb6bea8cafb849187c54219ed7"
+        }
+      ]
+    }
+  ]
+}
+
+

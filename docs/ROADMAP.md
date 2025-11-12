@@ -15,6 +15,8 @@
 - ✅ Unit tests run via `forge test` (CI integration pending).
 - ✅ Project README updated with architecture plan.
 - ✅ All solidity dependencies pulled via pnpm (`node_modules`) instead of git submodules.
+- ✅ Token snapshot script (`pnpm --filter @cipherflow/solver fetch:onlyswaps`) forks a live RPC, captures
+      `TokenMappingAdded` events, and writes harness data under `libs/testing/harness/` while enforcing 1:1 token mappings.
 
 ### Off-Chain
 - ✅ `@cipherflow/markets` workspace published with Aerodrome/Uniswap/Curve connector stubs.
