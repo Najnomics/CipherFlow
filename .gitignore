@@ -3,3 +3,4 @@ cache/
 node_modules/
 apps/*/node_modules/
 .env
+omo/
