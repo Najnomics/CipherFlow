@@ -62,3 +62,5 @@ process.on("SIGINT", () => {
   process.exit(0);
 });
 
+export { queue as listenerQueue, ingestion as listenerIngestion };
+

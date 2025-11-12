@@ -6,7 +6,7 @@ import { createDefaultConnectors, type SwapIntentDefinition, type QuoteConnector
 import { RoutePlanner } from "./routePlanner.js";
 import { Blocklock, encodeCiphertextToSolidity, encodeCondition } from "blocklock-js";
 import { ethers } from "ethers";
-import intentHubArtifact from "../../out/IntentHub.sol/IntentHub.json" assert { type: "json" };
+import intentHubArtifact from "../../../out/IntentHub.sol/IntentHub.json" assert { type: "json" };
 
 const configSchema = z.object({
   BASE_SEPOLIA_RPC_URL: z.string().url(),
@@ -62,15 +62,15 @@ async function submitCommitment(intent: SwapIntentDefinition) {
   }
 
   const payload = {
-    intentId: intent.intentId.toString(),
-    solver: wallet.address,
-    venue: report.venue,
-    amountIn: intent.amountIn.toString(),
-    minAmountOut: intent.minAmountOut.toString(),
-    expectedAmountOut: report.amountOut.toString(),
-    gasCost: report.gasCost.toString(),
-    bridgeFee: report.bridgeFee.toString(),
-    generatedAt: Date.now(),
+    i: intent.intentId.toString(),
+    s: wallet.address,
+    v: report.venue,
+    ain: intent.amountIn.toString(),
+    min: intent.minAmountOut.toString(),
+    aout: report.amountOut.toString(),
+    g: report.gasCost.toString(),
+    bf: report.bridgeFee.toString(),
+    t: Date.now(),
   };
 
   const payloadBytes = new TextEncoder().encode(JSON.stringify(payload));
