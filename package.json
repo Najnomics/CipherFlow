@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "description": "CipherFlow solver network hackathon project",
+  "workspaces": [
+    "apps/*"
+  ],
   "scripts": {
     "build:contracts": "forge build",
     "test:contracts": "forge test",
