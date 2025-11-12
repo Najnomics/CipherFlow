@@ -38,7 +38,7 @@
 - Coverage report + lint integration (Foundry profile + scripts).
 
 ### 3. Shared Libraries
-- Implement `libs/encoding` for canonical payload hash/decoding.
+- ✅ Implemented `libs/encoding` for canonical payload hash/decoding + Foundry tests.
 - Publish `libs/intent-registry.json` with network/asset configuration templates.
 - Provide `libs/testing/fixtures` for ciphertext + key payload generation.
 
@@ -61,7 +61,7 @@
 
 ## Next Steps
 1. Finish BlockLock subscription management inside `IntentHub`.
-2. Fill out shared libraries for payload encoding & fixtures.
+2. Fill out shared libraries for registry + fixtures.
 3. Build out the solver/off-chain stack per architecture plan.
 4. Add CI automation & coverage gates.
 5. Produce final docs/video/demo.
