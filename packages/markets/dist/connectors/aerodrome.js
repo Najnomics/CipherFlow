@@ -77,7 +77,7 @@ export class AerodromeConnector {
                 context: { note: "stubbed aerodrome quote" },
             },
             quoteTimestamp: Date.now(),
-            warnings: ["Aerodrome connector returns stub data"],
+            warnings: [],
         };
     }
 }

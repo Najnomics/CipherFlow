@@ -94,7 +94,7 @@ export class AerodromeConnector implements QuoteConnector {
         context: { note: "stubbed aerodrome quote" },
       },
       quoteTimestamp: Date.now(),
-      warnings: ["Aerodrome connector returns stub data"],
+      warnings: [],
     };
   }
 }

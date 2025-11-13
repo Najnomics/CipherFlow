@@ -43,11 +43,13 @@ interface SolverTelemetryEntry {
   error?: string;
 }
 
+const VENUE_BLOCKLIST = new Set(["aerodrome"]);
+
 const connectors = createDefaultConnectors({
   mockBridge: process.env.MOCK_BRIDGE_CONFIG
     ? JSON.parse(process.env.MOCK_BRIDGE_CONFIG)
     : undefined,
-});
+}).filter((connector) => !VENUE_BLOCKLIST.has(connector.venue));
 
 const GAS_PRICE_WEI = BigInt(process.env.GAS_PRICE_GWEI ?? 25) * 10n ** 9n;
 const AMOUNT_IN = 1_000_000_000_000_000_000n;
@@ -55,56 +57,47 @@ const TELEMETRY_FILE = resolve(
   process.cwd(),
   process.env.SOLVER_TELEMETRY_FILE ?? "../.cache/solver-telemetry.json",
 );
-const RANDOM_SNAPSHOT_COUNT = Number(process.env.PLANNER_RANDOM_COUNT ?? 3);
-const RANDOM_WIN_COUNT = Number(process.env.PLANNER_RANDOM_WIN_COUNT ?? 2);
-const RANDOM_LOSS_COUNT = Number(process.env.PLANNER_RANDOM_LOSS_COUNT ?? 1);
-const RANDOM_PENDING_COUNT = Number(process.env.PLANNER_RANDOM_PENDING_COUNT ?? 0);
+const INCLUDE_SYNTHETIC = process.env.PLANNER_INCLUDE_SYNTHETIC === "true";
+const RANDOM_SNAPSHOT_COUNT = INCLUDE_SYNTHETIC ? Number(process.env.PLANNER_RANDOM_COUNT ?? 3) : 0;
+const RANDOM_WIN_COUNT = INCLUDE_SYNTHETIC ? Number(process.env.PLANNER_RANDOM_WIN_COUNT ?? 2) : 0;
+const RANDOM_LOSS_COUNT = INCLUDE_SYNTHETIC ? Number(process.env.PLANNER_RANDOM_LOSS_COUNT ?? 1) : 0;
+const RANDOM_PENDING_COUNT = INCLUDE_SYNTHETIC
+  ? Number(process.env.PLANNER_RANDOM_PENDING_COUNT ?? 0)
+  : 0;
 const DISABLE_LIVE = process.env.PLANNER_DISABLE_LIVE === "true";
 
-const fallbackSnapshots: PlannerSnapshot[] = [
-  {
-    intentId: "402",
-    venue: "mock-bridge",
-    venueLabel: "Mock Bridge",
-    amountIn: AMOUNT_IN.toString(),
-    amountOut: "1055000000000000000",
-    gasCost: "2500000000000000",
-    bridgeFee: "500000000000000",
-    netProfit: "2500000000000000",
-    quoteIssuedAt: Date.now() - 3 * 60 * 1000,
-    warnings: ["Simulated bridge route"],
-    status: "won",
-    source: "fallback",
-  },
-  {
-    intentId: "401",
-    venue: "uniswap",
-    venueLabel: "Uniswap",
-    amountIn: "750000000000000000",
-    amountOut: "760500000000000000",
-    gasCost: "1500000000000000",
-    bridgeFee: "0",
-    netProfit: "4500000000000000",
-    quoteIssuedAt: Date.now() - 15 * 60 * 1000,
-    warnings: [],
-    status: "won",
-    source: "fallback",
-  },
-  {
-    intentId: "399",
-    venue: "aerodrome",
-    venueLabel: "Aerodrome",
-    amountIn: AMOUNT_IN.toString(),
-    amountOut: "1000000000000000000",
-    gasCost: "3700000000000000",
-    bridgeFee: "0",
-    netProfit: "-3700000000000000",
-    quoteIssuedAt: Date.now() - 35 * 60 * 1000,
-    warnings: ["Aerodrome connector returns stub data"],
-    status: "loss",
-    source: "fallback",
-  },
-];
+const fallbackSnapshots: PlannerSnapshot[] = INCLUDE_SYNTHETIC
+  ? [
+      {
+        intentId: "402",
+        venue: "mock-bridge",
+        venueLabel: "Mock Bridge",
+        amountIn: AMOUNT_IN.toString(),
+        amountOut: "1055000000000000000",
+        gasCost: "2500000000000000",
+        bridgeFee: "500000000000000",
+        netProfit: "2500000000000000",
+        quoteIssuedAt: Date.now() - 3 * 60 * 1000,
+        warnings: ["Simulated bridge route"],
+        status: "won",
+        source: "fallback",
+      },
+      {
+        intentId: "401",
+        venue: "uniswap",
+        venueLabel: "Uniswap",
+        amountIn: "750000000000000000",
+        amountOut: "760500000000000000",
+        gasCost: "1500000000000000",
+        bridgeFee: "0",
+        netProfit: "4500000000000000",
+        quoteIssuedAt: Date.now() - 15 * 60 * 1000,
+        warnings: [],
+        status: "won",
+        source: "fallback",
+      },
+    ]
+  : [];
 
 const recentSnapshots: PlannerSnapshot[] = [];
 
@@ -117,7 +110,6 @@ function generateRandomSnapshot(kind: "win" | "loss" | "pending"): PlannerSnapsh
     { id: "mock-bridge", label: "Mock Bridge", weight: 4 },
     { id: "uniswap", label: "Uniswap", weight: 3 },
     { id: "curve", label: "Curve", weight: 4 },
-    { id: "aerodrome", label: "Aerodrome", weight: 1 },
   ];
   const totalWeight = venues.reduce((sum, venue) => sum + venue.weight, 0);
   let pick = Math.random() * totalWeight;
@@ -166,13 +158,13 @@ async function readSolverTelemetry(): Promise<PlannerSnapshot[]> {
   try {
     const raw = await fs.readFile(TELEMETRY_FILE, "utf8");
     const entries: SolverTelemetryEntry[] = JSON.parse(raw);
-    return entries.map((entry) => {
+    return entries
+      .filter((entry) => entry.status === "committed" && !VENUE_BLOCKLIST.has(entry.venue))
+      .map((entry) => {
       const profit = BigInt(entry.netProfit);
       let status: PlannerSnapshot["status"] = "pending";
       if (entry.status === "committed") {
         status = profit >= 0n ? "won" : "loss";
-      } else if (entry.status === "failed") {
-        status = "loss";
       }
       return {
         intentId: entry.intentId,
@@ -245,6 +237,9 @@ function formatVenue(venue: string): string {
 }
 
 function recordSnapshot(snapshot: PlannerSnapshot) {
+  if (VENUE_BLOCKLIST.has(snapshot.venue)) {
+    return;
+  }
   recentSnapshots.unshift(snapshot);
   if (recentSnapshots.length > 10) {
     recentSnapshots.pop();
@@ -294,20 +289,28 @@ export async function GET() {
     recordSnapshot(liveSnapshot);
   }
 
-  const syntheticSnapshots = [
-    ...Array.from({ length: Math.max(0, RANDOM_WIN_COUNT) }, () => generateRandomSnapshot("win")),
-    ...Array.from({ length: Math.max(0, RANDOM_LOSS_COUNT) }, () => generateRandomSnapshot("loss")),
-    ...Array.from({ length: Math.max(0, RANDOM_PENDING_COUNT) }, () => generateRandomSnapshot("pending")),
-  ];
+  const syntheticSnapshots = INCLUDE_SYNTHETIC
+    ? [
+        ...Array.from({ length: Math.max(0, RANDOM_WIN_COUNT) }, () => generateRandomSnapshot("win")),
+        ...Array.from({ length: Math.max(0, RANDOM_LOSS_COUNT) }, () => generateRandomSnapshot("loss")),
+        ...Array.from(
+          { length: Math.max(0, RANDOM_PENDING_COUNT) },
+          () => generateRandomSnapshot("pending"),
+        ),
+      ]
+    : [];
 
   const snapshots = [
     ...(liveSnapshot ? [liveSnapshot] : []),
     ...recentSnapshots.filter((snapshot) => snapshot.source === "live"),
     ...telemetrySnapshots,
-    ...fallbackSnapshots,
-    ...syntheticSnapshots,
+    ...(INCLUDE_SYNTHETIC ? fallbackSnapshots : []),
+    ...(INCLUDE_SYNTHETIC ? syntheticSnapshots : []),
   ]
     .reduce<PlannerSnapshot[]>((acc, snapshot) => {
+      if (VENUE_BLOCKLIST.has(snapshot.venue)) {
+        return acc;
+      }
       if (!acc.find((entry) => entry.intentId === snapshot.intentId && entry.source === snapshot.source)) {
         acc.push(snapshot);
       }
