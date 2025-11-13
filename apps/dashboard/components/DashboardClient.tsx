@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { WalletControls } from "./WalletControls";
 import { CreateIntentForm } from "./CreateIntentForm";
 import { IntentFeed } from "./IntentFeed";
+import { ExecutionFeed } from "./ExecutionFeed";
 import type { DashboardConfig, DashboardNetworkConfig } from "../types";
 import { SnapControls } from "./SnapControls";
 
@@ -67,6 +68,7 @@ export function DashboardClient({ config }: DashboardClientProps) {
           <CreateIntentForm intentHubAddress={intentHubAddress} network={baseNetwork} />
           <div className="space-y-6">
             <IntentFeed intentHubAddress={intentHubAddress} assets={baseNetwork.settlementAssets} />
+            <ExecutionFeed intentHubAddress={intentHubAddress} network={baseNetwork} />
             <section className="rounded-xl border border-slate-800 bg-slate-900/70 p-6 shadow-xl space-y-3">
               <h3 className="text-lg font-medium text-slate-100">Contract Addresses</h3>
               <dl className="space-y-2 text-sm text-slate-300">
