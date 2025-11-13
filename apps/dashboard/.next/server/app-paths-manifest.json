@@ -1,0 +1,5 @@
+{
+  "/api/mock-intents/route": "app/api/mock-intents/route.js",
+  "/api/planner/route": "app/api/planner/route.js",
+  "/page": "app/page.js"
+}
