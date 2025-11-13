@@ -56,6 +56,10 @@ const TELEMETRY_FILE = resolve(
   process.env.SOLVER_TELEMETRY_FILE ?? "../.cache/solver-telemetry.json",
 );
 const RANDOM_SNAPSHOT_COUNT = Number(process.env.PLANNER_RANDOM_COUNT ?? 3);
+const RANDOM_WIN_COUNT = Number(process.env.PLANNER_RANDOM_WIN_COUNT ?? 2);
+const RANDOM_LOSS_COUNT = Number(process.env.PLANNER_RANDOM_LOSS_COUNT ?? 1);
+const RANDOM_PENDING_COUNT = Number(process.env.PLANNER_RANDOM_PENDING_COUNT ?? 0);
+const DISABLE_LIVE = process.env.PLANNER_DISABLE_LIVE === "true";
 
 const fallbackSnapshots: PlannerSnapshot[] = [
   {
@@ -108,33 +112,46 @@ function randomBetween(min: number, max: number) {
   return Math.random() * (max - min) + min;
 }
 
-function generateRandomSnapshot(): PlannerSnapshot {
+function generateRandomSnapshot(kind: "win" | "loss" | "pending"): PlannerSnapshot {
   const venues = [
-    { id: "mock-bridge", label: "Mock Bridge" },
-    { id: "uniswap", label: "Uniswap" },
-    { id: "aerodrome", label: "Aerodrome" },
-    { id: "curve", label: "Curve" },
+    { id: "mock-bridge", label: "Mock Bridge", weight: 4 },
+    { id: "uniswap", label: "Uniswap", weight: 3 },
+    { id: "curve", label: "Curve", weight: 4 },
+    { id: "aerodrome", label: "Aerodrome", weight: 1 },
   ];
-  const venue = venues[Math.floor(Math.random() * venues.length)];
+  const totalWeight = venues.reduce((sum, venue) => sum + venue.weight, 0);
+  let pick = Math.random() * totalWeight;
+  const venue = venues.find((entry) => {
+    pick -= entry.weight;
+    return pick <= 0;
+  }) ?? venues[0];
   const amountIn = AMOUNT_IN.toString();
-  const grossOut = BigInt(
-    Math.floor(Number(AMOUNT_IN) * randomBetween(0.96, 1.1)),
-  ).toString();
-  const gasCost = BigInt(Math.floor(Number(AMOUNT_IN) * randomBetween(0.001, 0.005))).toString();
-  const bridgeFee = venue.id === "mock-bridge"
-    ? BigInt(Math.floor(Number(AMOUNT_IN) * randomBetween(0.0003, 0.002))).toString()
+
+  const baseOut = Number(AMOUNT_IN);
+  let grossOut = baseOut;
+  if (kind === "win") {
+    grossOut = Math.floor(baseOut * randomBetween(1.015, 1.12));
+  } else if (kind === "loss") {
+    grossOut = Math.floor(baseOut * randomBetween(0.94, 0.995));
+  } else {
+    grossOut = baseOut;
+  }
+
+  const gasCost = BigInt(Math.floor(baseOut * randomBetween(0.001, 0.004))).toString();
+  const bridgeFee = venue.id === "mock-bridge" && kind !== "loss"
+    ? BigInt(Math.floor(baseOut * randomBetween(0.0003, 0.001))).toString()
     : "0";
+
   const netProfit = (BigInt(grossOut) - AMOUNT_IN - BigInt(bridgeFee) - BigInt(gasCost)).toString();
-  const profit = BigInt(netProfit);
   const status: PlannerSnapshot["status"] =
-    profit > 0n ? "won" : profit === 0n ? "pending" : "loss";
+    kind === "win" ? "won" : kind === "loss" ? "loss" : "pending";
 
   return {
     intentId: randomUUID().slice(0, 8),
     venue: venue.id,
     venueLabel: venue.label,
     amountIn,
-    amountOut: grossOut,
+    amountOut: BigInt(grossOut).toString(),
     gasCost,
     bridgeFee,
     netProfit,
@@ -236,7 +253,7 @@ function recordSnapshot(snapshot: PlannerSnapshot) {
 
 export async function GET() {
   const [quotes, telemetrySnapshots] = await Promise.all([
-    collectQuotes(),
+    DISABLE_LIVE ? Promise.resolve([]) : collectQuotes(),
     readSolverTelemetry(),
   ]);
   let liveSnapshot: PlannerSnapshot | null = null;
@@ -277,7 +294,11 @@ export async function GET() {
     recordSnapshot(liveSnapshot);
   }
 
-  const syntheticSnapshots = Array.from({ length: RANDOM_SNAPSHOT_COUNT }, generateRandomSnapshot);
+  const syntheticSnapshots = [
+    ...Array.from({ length: Math.max(0, RANDOM_WIN_COUNT) }, () => generateRandomSnapshot("win")),
+    ...Array.from({ length: Math.max(0, RANDOM_LOSS_COUNT) }, () => generateRandomSnapshot("loss")),
+    ...Array.from({ length: Math.max(0, RANDOM_PENDING_COUNT) }, () => generateRandomSnapshot("pending")),
+  ];
 
   const snapshots = [
     ...(liveSnapshot ? [liveSnapshot] : []),
@@ -318,6 +339,12 @@ export async function GET() {
     reports: snapshots,
     summary,
     lastUpdated: Date.now(),
+    configuration: {
+      randomWins: RANDOM_WIN_COUNT,
+      randomLosses: RANDOM_LOSS_COUNT,
+      randomPending: RANDOM_PENDING_COUNT,
+      liveDisabled: DISABLE_LIVE,
+    },
   });
 }
 
