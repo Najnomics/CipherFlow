@@ -9,6 +9,8 @@ export interface DashboardNetworkConfig {
   defaultCommitWindowSeconds?: number;
   defaultRevealDelayBlocks?: number;
   defaultExecutionWindowSeconds?: number;
+  intentHubAddress?: `0x${string}`;
+  settlementEscrowAddress?: `0x${string}`;
 }
 
 export interface DashboardConfig {

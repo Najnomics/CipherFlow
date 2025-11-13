@@ -3,6 +3,8 @@
     {
       "name": "base-sepolia",
       "blocklockSender": "0x0000000000000000000000000000000000000000",
+      "intentHubAddress": "0x67E757507436A64988E4ab772BD6ceB2084a335E",
+      "settlementEscrowAddress": "0x519e5a60Ef57F6EDB57b73fcB3ea1f0AC954829B",
       "settlementAssets": [
         {
           "symbol": "ETH",
