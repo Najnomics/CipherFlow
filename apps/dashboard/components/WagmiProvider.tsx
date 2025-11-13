@@ -3,6 +3,7 @@
 import { WagmiConfig, createConfig, http } from "wagmi";
 import { baseSepolia } from "wagmi/chains";
 import { ReactNode } from "react";
+import { injected } from "wagmi/connectors";
 
 const rpcUrl =
   process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL ??
@@ -10,9 +11,12 @@ const rpcUrl =
 
 const wagmiConfig = createConfig({
   chains: [baseSepolia],
+  connectors: [injected({ shimDisconnect: true })],
   transports: {
     [baseSepolia.id]: http(rpcUrl),
   },
+  multiInjectedProviderDiscovery: true,
+  autoConnect: true,
   ssr: true,
 });
 
