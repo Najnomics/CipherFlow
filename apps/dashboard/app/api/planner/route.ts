@@ -58,9 +58,15 @@ const TELEMETRY_FILE = resolve(
   process.env.SOLVER_TELEMETRY_FILE ?? "../.cache/solver-telemetry.json",
 );
 const INCLUDE_SYNTHETIC = process.env.PLANNER_INCLUDE_SYNTHETIC === "true";
-const RANDOM_SNAPSHOT_COUNT = INCLUDE_SYNTHETIC ? Number(process.env.PLANNER_RANDOM_COUNT ?? 3) : 0;
-const RANDOM_WIN_COUNT = INCLUDE_SYNTHETIC ? Number(process.env.PLANNER_RANDOM_WIN_COUNT ?? 2) : 0;
-const RANDOM_LOSS_COUNT = INCLUDE_SYNTHETIC ? Number(process.env.PLANNER_RANDOM_LOSS_COUNT ?? 1) : 0;
+const RANDOM_SNAPSHOT_COUNT = INCLUDE_SYNTHETIC
+  ? Number(process.env.PLANNER_RANDOM_COUNT ?? 3)
+  : 0;
+const RANDOM_WIN_COUNT = INCLUDE_SYNTHETIC
+  ? Number(process.env.PLANNER_RANDOM_WIN_COUNT ?? 2)
+  : 0;
+const RANDOM_LOSS_COUNT = INCLUDE_SYNTHETIC
+  ? Number(process.env.PLANNER_RANDOM_LOSS_COUNT ?? 1)
+  : 0;
 const RANDOM_PENDING_COUNT = INCLUDE_SYNTHETIC
   ? Number(process.env.PLANNER_RANDOM_PENDING_COUNT ?? 0)
   : 0;
@@ -113,10 +119,11 @@ function generateRandomSnapshot(kind: "win" | "loss" | "pending"): PlannerSnapsh
   ];
   const totalWeight = venues.reduce((sum, venue) => sum + venue.weight, 0);
   let pick = Math.random() * totalWeight;
-  const venue = venues.find((entry) => {
-    pick -= entry.weight;
-    return pick <= 0;
-  }) ?? venues[0];
+  const venue =
+    venues.find((entry) => {
+      pick -= entry.weight;
+      return pick <= 0;
+    }) ?? venues[0];
   const amountIn = AMOUNT_IN.toString();
 
   const baseOut = Number(AMOUNT_IN);
@@ -130,11 +137,14 @@ function generateRandomSnapshot(kind: "win" | "loss" | "pending"): PlannerSnapsh
   }
 
   const gasCost = BigInt(Math.floor(baseOut * randomBetween(0.001, 0.004))).toString();
-  const bridgeFee = venue.id === "mock-bridge" && kind !== "loss"
-    ? BigInt(Math.floor(baseOut * randomBetween(0.0003, 0.001))).toString()
-    : "0";
+  const bridgeFee =
+    venue.id === "mock-bridge" && kind !== "loss"
+      ? BigInt(Math.floor(baseOut * randomBetween(0.0003, 0.001))).toString()
+      : "0";
 
-  const netProfit = (BigInt(grossOut) - AMOUNT_IN - BigInt(bridgeFee) - BigInt(gasCost)).toString();
+  const netProfit = (
+    BigInt(grossOut) - AMOUNT_IN - BigInt(bridgeFee) - BigInt(gasCost)
+  ).toString();
   const status: PlannerSnapshot["status"] =
     kind === "win" ? "won" : kind === "loss" ? "loss" : "pending";
 
@@ -161,32 +171,34 @@ async function readSolverTelemetry(): Promise<PlannerSnapshot[]> {
     return entries
       .filter((entry) => entry.status === "committed" && !VENUE_BLOCKLIST.has(entry.venue))
       .map((entry) => {
-      const profit = BigInt(entry.netProfit);
-      let status: PlannerSnapshot["status"] = "pending";
-      if (entry.status === "committed") {
-        status = profit >= 0n ? "won" : "loss";
-      }
-      return {
-        intentId: entry.intentId,
-        venue: entry.venue,
-        venueLabel: entry.venueLabel ?? formatVenue(entry.venue),
-        amountIn: entry.amountIn,
-        amountOut: entry.amountOut,
-        gasCost: entry.gasCost,
-        bridgeFee: entry.bridgeFee,
-        netProfit: entry.netProfit,
-        quoteIssuedAt: entry.timestamp,
-        warnings: entry.warnings ?? (entry.error ? [entry.error] : []),
-        status,
-        source: "telemetry",
-      } satisfies PlannerSnapshot;
-    });
+        const profit = BigInt(entry.netProfit);
+        let status: PlannerSnapshot["status"] = "pending";
+        if (entry.status === "committed") {
+          status = profit >= 0n ? "won" : "loss";
+        }
+        return {
+          intentId: entry.intentId,
+          venue: entry.venue,
+          venueLabel: entry.venueLabel ?? formatVenue(entry.venue),
+          amountIn: entry.amountIn,
+          amountOut: entry.amountOut,
+          gasCost: entry.gasCost,
+          bridgeFee: entry.bridgeFee,
+          netProfit: entry.netProfit,
+          quoteIssuedAt: entry.timestamp,
+          warnings: entry.warnings ?? (entry.error ? [entry.error] : []),
+          status,
+          source: "telemetry",
+        } satisfies PlannerSnapshot;
+      });
   } catch {
     return [];
   }
 }
 
-async function collectQuotes(): Promise<Array<{ quote: QuoteResult; connector: QuoteConnector }>> {
+async function collectQuotes(): Promise<
+  Array<{ quote: QuoteResult; connector: QuoteConnector }>
+> {
   const intent = {
     chainId: 84532,
     fromToken: zeroAddress,
@@ -212,7 +224,9 @@ async function collectQuotes(): Promise<Array<{ quote: QuoteResult; connector: Q
     }),
   );
 
-  return results.filter((entry): entry is { connector: QuoteConnector; quote: QuoteResult } => entry !== null);
+  return results.filter(
+    (entry): entry is { connector: QuoteConnector; quote: QuoteResult } => entry !== null,
+  );
 }
 
 function netAmountOut(quote: QuoteResult): bigint {
@@ -271,8 +285,10 @@ export async function GET() {
     const gasCost = best.quote.leg.gasEstimate * GAS_PRICE_WEI;
     const netProfit = best.quote.leg.expectedAmountOut - AMOUNT_IN - bridgeFee - gasCost;
 
+    const maybeIntent = (best.quote as { intentId?: unknown })?.intentId;
+
     liveSnapshot = {
-      intentId: String(best.quote.intentId ?? Date.now()),
+      intentId: String(maybeIntent ?? randomUUID()),
       venue: best.quote.leg.venue,
       venueLabel: formatVenue(best.quote.leg.venue),
       amountOut: best.quote.leg.expectedAmountOut.toString(),
@@ -291,8 +307,14 @@ export async function GET() {
 
   const syntheticSnapshots = INCLUDE_SYNTHETIC
     ? [
-        ...Array.from({ length: Math.max(0, RANDOM_WIN_COUNT) }, () => generateRandomSnapshot("win")),
-        ...Array.from({ length: Math.max(0, RANDOM_LOSS_COUNT) }, () => generateRandomSnapshot("loss")),
+        ...Array.from(
+          { length: Math.max(0, RANDOM_WIN_COUNT) },
+          () => generateRandomSnapshot("win"),
+        ),
+        ...Array.from(
+          { length: Math.max(0, RANDOM_LOSS_COUNT) },
+          () => generateRandomSnapshot("loss"),
+        ),
         ...Array.from(
           { length: Math.max(0, RANDOM_PENDING_COUNT) },
           () => generateRandomSnapshot("pending"),
@@ -311,7 +333,11 @@ export async function GET() {
       if (VENUE_BLOCKLIST.has(snapshot.venue)) {
         return acc;
       }
-      if (!acc.find((entry) => entry.intentId === snapshot.intentId && entry.source === snapshot.source)) {
+      if (
+        !acc.find(
+          (entry) => entry.intentId === snapshot.intentId && entry.source === snapshot.source,
+        )
+      ) {
         acc.push(snapshot);
       }
       return acc;
@@ -350,4 +376,5 @@ export async function GET() {
     },
   });
 }
+
 

@@ -127,16 +127,40 @@ async function fetchListenerIntents(): Promise<NormalizedIntent[]> {
       return [];
     }
 
-    return data.intents.map((intent) => {
-      const createdAt = typeof intent.createdAt === "string" ? intent.createdAt : new Date().toISOString();
-      const commitDeadline = Number(intent.commitDeadline ?? intent.metadata?.commitDeadline ?? 0);
-      const revealDeadline = Number(intent.revealDeadline ?? intent.metadata?.revealDeadline ?? 0);
-      const executionDeadline = Number(intent.executionDeadline ?? intent.metadata?.executionDeadline ?? 0);
+    return data.intents.map((rawIntent) => {
+      const intent = rawIntent as {
+        intentId?: unknown;
+        externalId?: unknown;
+        source?: unknown;
+        fromToken?: unknown;
+        toToken?: unknown;
+        amountIn?: unknown;
+        minAmountOut?: unknown;
+        sourceChainId?: unknown;
+        createdAt?: unknown;
+        commitDeadline?: unknown;
+        revealDeadline?: unknown;
+        executionDeadline?: unknown;
+        metadata?: Record<string, unknown>;
+      };
+
+      const metadata = intent.metadata ?? {};
+      const createdAt =
+        typeof intent.createdAt === "string" ? intent.createdAt : new Date().toISOString();
+
+      const commitDeadline = Number(
+        intent.commitDeadline ?? metadata.commitDeadline ?? 0,
+      );
+      const revealDeadline = Number(intent.revealDeadline ?? metadata.revealDeadline ?? 0);
+      const executionDeadline = Number(
+        intent.executionDeadline ?? metadata.executionDeadline ?? 0,
+      );
+
       const enriched: IntentShape = {
         intentId: String(intent.intentId ?? intent.externalId ?? randomUUID()),
         source: String(intent.source ?? "unknown"),
-        fromToken: String(intent.fromToken ?? intent.metadata?.fromToken ?? ""),
-        toToken: String(intent.toToken ?? intent.metadata?.toToken ?? ""),
+        fromToken: String(intent.fromToken ?? metadata.fromToken ?? ""),
+        toToken: String(intent.toToken ?? metadata.toToken ?? ""),
         amountIn: String(intent.amountIn ?? "0"),
         minAmountOut: String(intent.minAmountOut ?? "0"),
         sourceChainId: Number(intent.sourceChainId ?? 0),
@@ -167,4 +191,5 @@ export async function GET() {
 
   return NextResponse.json({ intents });
 }
+
 
