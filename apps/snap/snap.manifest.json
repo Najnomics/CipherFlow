@@ -1,0 +1,31 @@
+{
+  "$schema": "https://metamask.github.io/snaps/snap.manifest.json",
+  "version": "0.1.0",
+  "description": "CipherFlow wallet companion snap that surfaces intent and settlement details inside MetaMask.",
+  "proposedName": "CipherFlow Snap",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Najnomics/CipherFlow"
+  },
+  "source": {
+    "shasum": "K/hicOanz/V3WDOT2kXWPbV64mFED8FLd4f3AYiRFjg=",
+    "location": {
+      "npm": {
+        "packageName": "@cipherflow/snap",
+        "registry": "https://registry.npmjs.org",
+        "filePath": "dist/bundle.js",
+        "iconPath": "images/icon.svg"
+      }
+    }
+  },
+  "initialPermissions": {
+    "endowment:network-access": {},
+    "endowment:rpc": {
+      "dapps": true
+    },
+    "snap_manageState": {},
+    "endowment:lifecycle-hooks": {}
+  },
+  "platformVersion": "9.3.0",
+  "manifestVersion": "0.1"
+}

@@ -75,6 +75,59 @@ cast send 0x519e5a60Ef57F6EDB57b73fcB3ea1f0AC954829B \
   --private-key $PRIVATE_KEY
 ```
 
+## MetaMask Snap Companion
+
+The `apps/snap` workspace ships a MetaMask snap that surfaces deployed CipherFlow contracts inside MetaMask Flask.
+
+1. **Install snap dependencies**
+   ```bash
+   pnpm --filter @cipherflow/snap install
+   ```
+2. **Build (updates `snap.manifest.json`)**
+   ```bash
+   pnpm --filter @cipherflow/snap build
+   ```
+3. **Serve locally**
+   ```bash
+   pnpm --filter @cipherflow/snap start
+   ```
+4. In the dashboard or any dapp, request the snap:
+   ```ts
+   await window.ethereum.request({
+     method: 'wallet_enable',
+     params: [{
+       wallet_snap: {
+         'local:http://localhost:8080': {}
+       }
+     }],
+   });
+   ```
+5. Invoke snap methods (`cipherflow_getConfig`, `cipherflow_setConfig`, `cipherflow_getHelp`, `cipherflow_previewCommitment`) with `wallet_invokeSnap` to display deployment details and pre-trade insights inside MetaMask. Example preview call:
+   ```ts
+   await window.ethereum.request({
+     method: 'wallet_invokeSnap',
+     params: {
+       snapId: 'local:http://localhost:8080',
+       request: {
+         method: 'cipherflow_previewCommitment',
+         params: {
+           intentId: '402',
+           venue: 'mock-bridge',
+           tokenSymbol: 'RUSD',
+           amountInWei: '1000000000000000000',
+           minAmountOutWei: '995000000000000000',
+           maxAmountOutWei: '1055000000000000000',
+           gasEstimateWei: '2500000000000000',
+           expectedBlocks: 120,
+           bridgeFinalityMinutes: 8,
+           slippageBps: 75
+         },
+       },
+     },
+   });
+   ```
+   The snap renders price bands, settlement time, gas budgets, and risk notes in the MetaMask pre-transaction panel.
+
 ## System Architecture
 ```
 ┌────────────────────┐      ┌───────────────────────┐
