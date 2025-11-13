@@ -16,7 +16,6 @@ const wagmiConfig = createConfig({
     [baseSepolia.id]: http(rpcUrl),
   },
   multiInjectedProviderDiscovery: true,
-  autoConnect: true,
   ssr: true,
 });
 

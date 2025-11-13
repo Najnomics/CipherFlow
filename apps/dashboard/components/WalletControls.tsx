@@ -26,7 +26,7 @@ export function WalletControls() {
         >
           {connectStatus === "pending" ? "Connecting…" : "Connect Wallet"}
         </button>
-        {connectError && <span className="text-xs text-rose-300">{connectError.shortMessage ?? connectError.message}</span>}
+        {connectError && <span className="text-xs text-rose-300">{connectError.message}</span>}
       </div>
     );
   }
