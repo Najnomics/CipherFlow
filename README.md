@@ -22,14 +22,14 @@ We ingest user intents, encrypt solver routes with dcipher’s BlockLock, and re
 ```mermaid
 graph TD
   subgraph User Journey
-    A[Trader submits intent\n(via API/UI)] --> B(IntentHub\ndeploys auction)
-    B --> C(Commitment Open\nwindow)
-    C --> D{Solver Agents}
-    D -->|Encrypt route + collateral| E[BlockLock Network]
+    A[Trader submits intent<br/>via API/UI] --> B[IntentHub deploys auction]
+    B --> C[Commitment window open]
+    C --> D{Solver agents}
+    D -->|Encrypt route + collateral| E[BlockLock network]
     E -->|Reveal key block.number + 1| B
-    B --> F[SettlementEscrow\nholds trader funds]
-    D --> G[Executor Bot\nruns settlement]
-    G --> H[Reveal Explorer\nshows price improvement]
+    B --> F[SettlementEscrow<br/>holds trader funds]
+    D --> G[Executor bot<br/>runs settlement]
+    G --> H[Reveal explorer<br/>shows price improvement]
   end
 ```
 
