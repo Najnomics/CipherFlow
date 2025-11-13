@@ -1,4 +1,4 @@
 # Deployment Fix Notes
 
-This file moved to `docs/DEPLOYMENTfix.md` so the latest version can live alongside the rest of the project documentation.
+This file has moved to `docs/DEPLOYMENTfix.md` for the canonical, up-to-date version.
 
