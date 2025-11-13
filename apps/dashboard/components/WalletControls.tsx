@@ -14,7 +14,10 @@ export function WalletControls() {
   const { disconnect } = useDisconnect();
   const { switchChain, status: switchStatus } = useSwitchChain();
 
-  const primaryConnector = useMemo(() => connectors.find((connector) => connector.ready), [connectors]);
+  const primaryConnector = useMemo(() => {
+    if (!connectors.length) return null;
+    return connectors.find((connector) => connector.ready) ?? connectors[0] ?? null;
+  }, [connectors]);
 
   if (!isConnected) {
     return (
@@ -27,6 +30,9 @@ export function WalletControls() {
           {connectStatus === "pending" ? "Connecting…" : "Connect Wallet"}
         </button>
         {connectError && <span className="text-xs text-rose-300">{connectError.message}</span>}
+        {!primaryConnector && connectStatus !== "pending" && (
+          <span className="text-xs text-slate-500">No injected wallet detected</span>
+        )}
       </div>
     );
   }
