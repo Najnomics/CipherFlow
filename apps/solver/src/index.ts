@@ -76,6 +76,7 @@ const configSchema = z.object({
   SOLVER_FROM_TOKEN_OVERRIDE: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
   SOLVER_TO_TOKEN_OVERRIDE: z.string().regex(/^0x[0-9a-fA-F]{40}$/).optional(),
   PLANNER_DISABLE_LIVE: z.coerce.boolean().optional(),
+  SOLVER_POLL_INTERVAL_MS: z.coerce.number().int().positive().optional(),
 });
 
 const env = configSchema.parse(process.env);
@@ -110,6 +111,10 @@ const routePlanner = new RoutePlanner({
     console.log(message);
   },
 });
+
+const processingIntents = new Map<bigint, Promise<void>>();
+const committedIntents = new Set<string>();
+const pollIntervalMs = env.SOLVER_POLL_INTERVAL_MS ?? 30_000;
 
 async function submitCommitment(intent: SwapIntentDefinition) {
   const report = await routePlanner.planBestRoute(intent);
@@ -211,6 +216,8 @@ async function submitCommitment(intent: SwapIntentDefinition) {
       status: "committed",
       txHash: receipt?.hash,
     });
+
+    committedIntents.add(intent.intentId.toString());
   } catch (error) {
     await recordTelemetry({
       ...telemetryBase,
@@ -222,12 +229,101 @@ async function submitCommitment(intent: SwapIntentDefinition) {
   }
 }
 
+async function processIntent(intentId: bigint) {
+  if (committedIntents.has(intentId.toString())) {
+    return;
+  }
+  if (processingIntents.has(intentId)) {
+    return;
+  }
+
+  const job = (async () => {
+    try {
+      const hasCommitment = await solverHasActiveCommitment(intentId);
+      if (hasCommitment) {
+        console.log("[solver] skipping intent with existing commitment", { intentId: intentId.toString() });
+        committedIntents.add(intentId.toString());
+        return;
+      }
+
+      const definition = await buildIntentDefinition(intentId);
+      await submitCommitment(definition);
+    } catch (error) {
+      console.error("[solver] intent processing error", {
+        intentId: intentId.toString(),
+        error: error instanceof Error ? error.message : String(error),
+      });
+    } finally {
+      processingIntents.delete(intentId);
+    }
+  })();
+
+  processingIntents.set(intentId, job);
+  await job;
+}
+
+function scheduleIntent(intentId: bigint) {
+  if (committedIntents.has(intentId.toString()) || processingIntents.has(intentId)) {
+    return;
+  }
+  // Fire and forget; the map tracks completion.
+  void processIntent(intentId);
+}
+
+async function solverHasActiveCommitment(intentId: bigint): Promise<boolean> {
+  const commitmentIds: bigint[] = await intentHub.listCommitmentsForIntent(intentId);
+  for (const commitmentId of commitmentIds) {
+    const record = await intentHub.getCommitment(commitmentId);
+    const solverAddr = (record.commitment.solver as string | undefined) ?? "";
+    if (solverAddr.toLowerCase() !== wallet.address.toLowerCase()) {
+      continue;
+    }
+    const state = Number(record.commitment.state ?? 0);
+    if (state === 1 || state === 2) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function bootstrapOpenIntents() {
+  const openIntents = await collectOpenIntentIds();
+  openIntents.forEach((intentId) => scheduleIntent(intentId));
+}
+
 async function main() {
   console.log("[solver] booting", { rpc: env.BASE_SEPOLIA_RPC_URL, intentHub: env.INTENT_HUB_ADDRESS });
 
-  const intentDefinition = await resolveIntentDefinition();
+  if (env.SOLVER_TARGET_INTENT_ID !== undefined) {
+    const definition = await resolveIntentDefinition(env.SOLVER_TARGET_INTENT_ID);
+    await submitCommitment(definition);
+    return;
+  }
 
-  await submitCommitment(intentDefinition);
+  await bootstrapOpenIntents();
+
+  const onIntentCreated = (intentId: bigint) => {
+    console.log("[solver] detected new intent", { intentId: intentId.toString() });
+    scheduleIntent(intentId);
+  };
+
+  intentHub.on("IntentCreated", onIntentCreated);
+
+  const pollTimer = setInterval(async () => {
+    try {
+      const open = await collectOpenIntentIds();
+      open.forEach((intentId) => scheduleIntent(intentId));
+    } catch (error) {
+      console.error("[solver] poll error", error);
+    }
+  }, pollIntervalMs);
+
+  process.on("SIGINT", () => {
+    console.log("[solver] shutting down");
+    clearInterval(pollTimer);
+    intentHub.off("IntentCreated", onIntentCreated);
+    process.exit(0);
+  });
 }
 
 void main().catch((error) => {
@@ -238,17 +334,18 @@ void main().catch((error) => {
 const DEFAULT_CHAIN_ID = 84532;
 const MAX_INTENT_SCAN = 25n;
 
-async function resolveIntentDefinition(): Promise<SwapIntentDefinition> {
-  const targetIntentId = env.SOLVER_TARGET_INTENT_ID ?? (await findOpenIntentId());
-  if (targetIntentId === undefined) {
-    throw new Error(
-      "No open intents found on-chain and SOLVER_TARGET_INTENT_ID not provided. Create an intent or set the env var.",
-    );
+async function resolveIntentDefinition(targetIntentId?: bigint): Promise<SwapIntentDefinition> {
+  const intentId = targetIntentId ?? env.SOLVER_TARGET_INTENT_ID ?? (await findOpenIntentId());
+  if (intentId === undefined) {
+    throw new Error("No open intents found on-chain and SOLVER_TARGET_INTENT_ID not provided. Create an intent or set the env var.");
   }
+  return buildIntentDefinition(intentId);
+}
 
-  const onchainIntent = await intentHub.getIntent(targetIntentId);
+async function buildIntentDefinition(intentId: bigint): Promise<SwapIntentDefinition> {
+  const onchainIntent = await intentHub.getIntent(intentId);
   if (onchainIntent.trader === zeroAddress) {
-    throw new Error(`Intent ${targetIntentId} not found`);
+    throw new Error(`Intent ${intentId} not found`);
   }
 
   const now = Math.floor(Date.now() / 1000);
@@ -285,7 +382,7 @@ async function resolveIntentDefinition(): Promise<SwapIntentDefinition> {
     env.SOLVER_DESTINATION_CHAIN_ID ?? (parsedMetadata?.destinationChainId as number | undefined);
 
   return {
-    intentId: BigInt(targetIntentId),
+    intentId,
     fromToken: fromToken,
     toToken: toToken,
     amountIn: BigInt(onchainIntent.amountIn),
@@ -319,6 +416,36 @@ async function findOpenIntentId(): Promise<bigint | undefined> {
   }
 
   return undefined;
+}
+
+async function collectOpenIntentIds(limit = Number(MAX_INTENT_SCAN)): Promise<bigint[]> {
+  const latestId: bigint = BigInt(await intentHub.nextIntentId());
+  if (latestId === 0n) {
+    return [];
+  }
+
+  const open: bigint[] = [];
+  const now = Math.floor(Date.now() / 1000);
+
+  let scanned = 0n;
+  for (let id = latestId; id >= 1n && scanned < MAX_INTENT_SCAN; id--, scanned++) {
+    const intent = await intentHub.getIntent(id);
+    if (intent.trader === zeroAddress) {
+      continue;
+    }
+    if (Number(intent.state) !== 1) {
+      continue;
+    }
+    if (Number(intent.commitDeadline) <= now) {
+      continue;
+    }
+    open.push(id);
+    if (open.length >= limit) {
+      break;
+    }
+  }
+
+  return open;
 }
 
 function decodeIntentMetadata(extraData: string | undefined): Record<string, unknown> | undefined {
