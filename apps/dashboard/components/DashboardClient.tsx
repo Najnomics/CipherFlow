@@ -5,6 +5,7 @@ import { WalletControls } from "./WalletControls";
 import { CreateIntentForm } from "./CreateIntentForm";
 import { IntentFeed } from "./IntentFeed";
 import type { DashboardConfig, DashboardNetworkConfig } from "../types";
+import { SnapControls } from "./SnapControls";
 
 interface DashboardClientProps {
   config: DashboardConfig;
@@ -17,6 +18,21 @@ export function DashboardClient({ config }: DashboardClientProps) {
   );
 
   const intentHubAddress = config.intentHubAddress;
+  const settlementEscrowAddress = config.settlementEscrowAddress;
+
+  const snapId =
+    process.env.NEXT_PUBLIC_CIPHERFLOW_SNAP_ID ??
+    process.env.NEXT_PUBLIC_CIPHERFLOW_SNAP ??
+    "local:http://localhost:8080";
+
+  const baseRpcUrl =
+    process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL ??
+    "https://base-sepolia.g.alchemy.com/v2/demo";
+
+  const collateralWei =
+    process.env.NEXT_PUBLIC_SOLVER_COLLATERAL_WEI ??
+    process.env.SOLVER_COLLATERAL_WEI ??
+    "1000000000000000";
 
   return (
     <main className="min-h-screen px-6 py-10 space-y-10">
@@ -31,7 +47,19 @@ export function DashboardClient({ config }: DashboardClientProps) {
             collateralised without exposing your strategy to copy-traders.
           </p>
         </div>
-        <WalletControls />
+        <div className="flex w-full flex-col items-end gap-4 sm:w-auto">
+          <WalletControls />
+          {baseNetwork && (
+            <SnapControls
+              snapId={snapId}
+              baseRpcUrl={baseRpcUrl}
+              intentHubAddress={intentHubAddress}
+              settlementEscrowAddress={settlementEscrowAddress}
+              blocklockSender={baseNetwork.blocklockSender}
+              collateralWei={collateralWei}
+            />
+          )}
+        </div>
       </header>
 
       {baseNetwork ? (
