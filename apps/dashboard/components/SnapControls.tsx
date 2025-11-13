@@ -44,6 +44,9 @@ export function SnapControls({
   const [isSyncing, setIsSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  const [isShowingConfig, setIsShowingConfig] = useState(false);
+  const [isShowingHelp, setIsShowingHelp] = useState(false);
 
   const statusLabel = useMemo(() => {
     if (!hasProvider) return "Wallet not detected";
@@ -178,7 +181,76 @@ export function SnapControls({
   }, [lastSyncedAt]);
 
   const canInstall = hasProvider && isFlask;
-  const canSync = canInstall && snapInfo && isConnected && !isChecking;
+  const hasSnap = Boolean(canInstall && snapInfo);
+  const canSync = hasSnap && isConnected && !isChecking;
+
+  const invokeSnap = useCallback(
+    async (method: string, params?: Record<string, unknown>) => {
+      if (typeof window === "undefined") return;
+      const ethereum = (window as any).ethereum;
+      if (!ethereum) return;
+
+      setError(null);
+      await ethereum.request({
+        method: "wallet_invokeSnap",
+        params: {
+          snapId,
+          request: {
+            method,
+            params,
+          },
+        },
+      });
+    },
+    [snapId],
+  );
+
+  const showConfig = useCallback(async () => {
+    setIsShowingConfig(true);
+    try {
+      await invokeSnap("cipherflow_getConfig");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message || "Failed to display snap config.");
+    } finally {
+      setIsShowingConfig(false);
+    }
+  }, [invokeSnap]);
+
+  const showHelp = useCallback(async () => {
+    setIsShowingHelp(true);
+    try {
+      await invokeSnap("cipherflow_getHelp");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message || "Unable to open snap help dialog.");
+    } finally {
+      setIsShowingHelp(false);
+    }
+  }, [invokeSnap]);
+
+  const previewIntent = useCallback(async () => {
+    setIsPreviewing(true);
+    try {
+      await invokeSnap("cipherflow_previewCommitment", {
+        intentId: "demo-commitment",
+        amountInWei: "1000000000000000000",
+        minAmountOutWei: "980000000000000000",
+        tokenSymbol: "ETH",
+        tokenDecimals: 18,
+        gasEstimateWei: "4500000000000000",
+        expectedBlocks: 12,
+        bridgeFinalityMinutes: 2,
+        slippageBps: 75,
+        venue: "CipherFlow Demo Route",
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setError(message || "Failed to preview commitment in snap.");
+    } finally {
+      setIsPreviewing(false);
+    }
+  }, [invokeSnap]);
 
   return (
     <div className="flex w-full flex-col items-end gap-2 text-xs text-slate-400">
@@ -209,6 +281,30 @@ export function SnapControls({
           className="rounded-md border border-emerald-500 px-3 py-1 text-[11px] font-medium text-emerald-200 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:border-slate-700 disabled:text-slate-500"
         >
           {isSyncing ? "Syncing…" : "Sync Snap Config"}
+        </button>
+        <button
+          type="button"
+          onClick={showConfig}
+          disabled={!hasSnap || isShowingConfig}
+          className="rounded-md border border-slate-600 px-3 py-1 text-[11px] font-medium text-slate-200 transition hover:bg-slate-600/30 disabled:cursor-not-allowed disabled:border-slate-700 disabled:text-slate-500"
+        >
+          {isShowingConfig ? "Opening…" : "View Config"}
+        </button>
+        <button
+          type="button"
+          onClick={previewIntent}
+          disabled={!hasSnap || isPreviewing}
+          className="rounded-md border border-purple-500 px-3 py-1 text-[11px] font-medium text-purple-200 transition hover:bg-purple-500/20 disabled:cursor-not-allowed disabled:border-slate-700 disabled:text-slate-500"
+        >
+          {isPreviewing ? "Previewing…" : "Preview Intent"}
+        </button>
+        <button
+          type="button"
+          onClick={showHelp}
+          disabled={!hasSnap || isShowingHelp}
+          className="rounded-md border border-slate-500 px-3 py-1 text-[11px] font-medium text-slate-200 transition hover:bg-slate-500/20 disabled:cursor-not-allowed disabled:border-slate-700 disabled:text-slate-500"
+        >
+          {isShowingHelp ? "Opening…" : "Snap Help"}
         </button>
       </div>
 
